@@ -38,6 +38,7 @@ OFFICIAL = [
     ('Mean cold index', '110.8 ms', '123.6 ms', '658.5 ms'),
     ('Warm query p50', '0.32 ms', '0.34 ms', '1.92 ms'),
     ('Expected tokens to first hit', '358', '353', '353'),
+    ('Recall at 500 tokens', '83.6%', '84.2%', '84.3%'),
 ]
 # before/after bars: (panel title, unit, [(label, lo, hi, text, kind)])
 BARS = [
