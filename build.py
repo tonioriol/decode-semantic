@@ -6,7 +6,7 @@ H = Path(__file__).resolve().parent
 NAME = 'rsemble'  # default text only; the page's one NAME constant (in its <script>) is what to change
 
 # ---- aggregate benchmark data ----
-# Chat search, 45 labelled questions, hit@1/3/10, warm median latency, idle footprint
+# Chat search: hit@1/3/10, warm median latency, idle footprint
 LADDER = [
     # label, sub, h1, h3, h10, latency, memory, kind
     ('Python Semble 0.7.3', 'in-RAM reference', .511, .711, .822, '41 ms', '4.8 GB', 'ref'),
@@ -18,8 +18,8 @@ LADDER = [
     ('Now', 'stored vectors, two-worker mapped scan', .578, .689, .778, '19 ms', '~129 MB', 'now'),
 ]
 HOLDOUT = [
-    ('Static', '60 unseen questions', .517, .767, .883, '', '', 'old'),
-    ('Now', '60 unseen questions', .617, .817, .917, '', '', 'now'),
+    ('Static', '', .517, .767, .883, '', '', 'old'),
+    ('Now', '', .617, .817, .917, '', '', 'now'),
 ]
 MEMORY_ACC = [
     ('Benchmark', '30 questions', .700, .833, .967, '', '', 'old'),
@@ -30,6 +30,14 @@ CODE = [
     (NAME, '', .449, .626, .766, '4.4 s', '9.9 ms', 'now'),
     ('ck 0.8.1', 'hybrid, bge-small', .290, .458, .626, '88 min', '1.6 s', 'old'),
     ('Probe', 'BM25, no index', .215, .336, .467, 'none', '6.6 s', 'old'),
+]
+# Semble's official corpus, pinned at upstream revision a1ba6c18a4b0a58a3d1a15217d64bc92678d1d9d.
+# Same-host reruns: shipped Rust default, Rust code-only control, Python Semble 0.7.3.
+OFFICIAL = [
+    ('NDCG@10', '0.8513', '0.8553', '0.8547'),
+    ('Mean cold index', '110.8 ms', '123.6 ms', '658.5 ms'),
+    ('Warm query p50', '0.32 ms', '0.34 ms', '1.92 ms'),
+    ('Expected tokens to first hit', '358', '353', '353'),
 ]
 # before/after bars: (panel title, unit, [(label, lo, hi, text, kind)])
 BARS = [
@@ -226,6 +234,14 @@ table{{border-collapse:collapse;width:100%;font-size:14px}}
 td{{padding:9px 0;border-top:1px solid var(--rule);vertical-align:top}}
 td.v{{text-align:right;font-weight:700;padding-inline:16px;white-space:nowrap}}
 td.n{{color:var(--muted);font-size:13px}}
+.official{{table-layout:fixed}}
+.official th,.official td{{padding:8px;text-align:right;vertical-align:middle}}
+.official th:first-child{{width:35%;text-align:left}}
+.official th[scope="row"]{{font-weight:600;border-top:1px solid var(--rule)}}
+.official thead th{{font-size:13px;vertical-align:bottom}}
+.official thead small{{display:block;font-size:inherit;font-weight:400}}
+.official td{{white-space:nowrap}}
+.official .default{{background:var(--acc-soft);font-weight:700}}
 .parts{{display:flex;flex-wrap:wrap;gap:8px}}
 .parts span{{font-size:13px;padding:4px 10px;border:1px solid var(--rule);border-radius:999px;background:var(--plate)}}
 footer{{font-size:12px;color:var(--muted);display:grid;gap:6px;border-top:1px solid var(--rule);padding-top:16px}}
@@ -242,6 +258,9 @@ a{{color:var(--acc)}}
   .dp-head{{display:none}}
   .dp-row .num::before{{content:attr(data-h);color:var(--muted);font-weight:400;font-size:11px}}
   .td-n{{display:none}}
+  .official-plate{{padding:8px}}
+  .official th,.official td{{padding-inline:4px;font-size:13px}}
+  .official thead th{{font-size:12px}}
 }}
 </style></head>
 <body><main>
@@ -253,19 +272,19 @@ a{{color:var(--acc)}}
   <div class="tiles">
     <div class="tile"><b>19 ms</b><span>chat search with rerank, warm median</span></div>
     <div class="tile"><b>4.8 GB → 129 MB</b><span>chat search idle memory vs Python Semble</span></div>
-    <div class="tile"><b>.617</b><span>hit@1 on 60 unseen chat questions (static: .517)</span></div>
+    <div class="tile"><b>.617</b><span>hit@1 on unseen chat questions (static: .517)</span></div>
     <div class="tile"><b>31–58 ms</b><span>notes search, warm (was 204–327 ms)</span></div>
   </div>
 </header>
 
 <section>
-  <div class="eyebrow">Chat search · 45 labelled questions</div>
+  <div class="eyebrow">Chat search · labelled questions</div>
   <h2>Every step up the ladder, measured</h2>
   <p class="muted">Each row is a version we shipped or tried. The rerank lifted hit@1 from .533 to .578. Storing its passage vectors at index time cut a search from 230 ms to 42–44 ms, and scanning the vectors on two workers over memory-mapped files to 19 ms. Measured side by side, query by query, the rerank itself adds 2 ms: 19.1 ms with it, 16.5 ms without. Rows are measured on the index of their day; hit@3 moved from .711 to .689 when the fixture was refreshed with newer chats, and the speed changes left every ranking identical.</p>
   <div class="plate">{dots(LADDER, .4, .9, [.4,.5,.6,.7,.8,.9], ['latency','idle'])}</div>
   {LEGEND}
   <div class="bars">
-    <div class="panel"><h4>Chat search · 60 unseen questions (holdout)</h4><div class="plate">{dots(HOLDOUT, .4, 1.0, [.4,.6,.8,1.0])}</div></div>
+    <div class="panel"><h4>Chat search · unseen questions (holdout)</h4><div class="plate">{dots(HOLDOUT, .4, 1.0, [.4,.6,.8,1.0])}</div></div>
     <div class="panel"><h4>Notes search · hit@1/3/10</h4><div class="plate">{dots(MEMORY_ACC, .4, 1.0, [.4,.6,.8,1.0])}</div></div>
   </div>
 </section>
@@ -274,11 +293,23 @@ a{{color:var(--acc)}}
   <div class="eyebrow">Before → after</div>
   <h2>Faster than the port it started as, lighter than the original</h2>
   <div class="plate">{bars()}</div>
-  <p class="note">Physical footprint, decimal MB, on a shared, loaded laptop. Ranges are repeated runs. Python Semble keeps its whole index in RAM; {nm()} reads it from disk in place. Python Semble's 41 ms was measured on an earlier day, not in the same window. Chat latency is the median of 810 warm searches over six rounds with rerank on and off interleaved query by query (round medians 17–22 ms, p90 28 ms). Chat figures come from a benchmark index; a long-running chat process has been seen at 208–273 MB, most of it freed memory macOS had not yet reclaimed. The notes figure is the long-running process; a fresh one reads 90–164 MB for the same reason.</p>
+  <p class="note">Physical footprint, decimal MB, on a shared, loaded laptop. Ranges are repeated runs. Python Semble keeps its whole index in RAM; {nm()} reads it from disk in place. Python Semble's 41 ms was measured on an earlier day, not in the same window. Chat latency is the median of warm searches with rerank on and off interleaved query by query (round medians 17–22 ms, p90 28 ms). Chat figures come from a benchmark index; a long-running chat process has been seen at 208–273 MB, most of it freed memory macOS had not yet reclaimed. The notes figure is the long-running process; a fresh one reads 90–164 MB for the same reason.</p>
+</section>
+
+<section id="official-benchmark">
+  <div class="eyebrow">Official Semble benchmark · code search</div>
+  <h2 id="official-title">Code search on 63 pinned repositories</h2>
+  <p>We reran <a href="https://github.com/MinishLab/semble/tree/a1ba6c18a4b0a58a3d1a15217d64bc92678d1d9d">MinishLab’s Semble benchmark</a> on all 1,251 queries across 19 languages. The shipped {nm()} default scored 0.8513 NDCG@10, compared with 0.8547 for Python Semble 0.7.3.</p>
+  <div class="plate official-plate"><table class="official" aria-labelledby="official-title">
+    <thead><tr><th scope="col">Metric</th><th scope="col" class="default">{nm()}<small>Docs included</small></th><th scope="col">{nm()}<small>Code only</small></th><th scope="col">Python<small>Semble</small></th></tr></thead>
+    <tbody>{''.join(f'<tr><th scope="row">{esc(label)}</th><td class="default">{docs}</td><td>{code}</td><td>{python}</td></tr>' for label, docs, code, python in OFFICIAL)}</tbody>
+  </table></div>
+  <p><strong>Documentation stays on by default.</strong> The benchmark labels code spans, not documentation. A relevant README can rank above the labelled code, as it does for a URL-routing query in chi. That lowers the code-span score even when the README helps answer the question. The code-only run is a comparison, not the shipped setting.</p>
+  <p class="note">The benchmark uses repository-averaged, span-aware NDCG@10. Both Rust runs and Python use the v2 embedding model. CPU timings are from the same host on the 19-repository speed subset and exclude model loading and CLI/MCP overhead. Rust cold timings include saving and reopening the index; Python builds in memory. The first-hit metric uses the top 50 chunks and assigns 32,000 tokens to a miss.</p>
 </section>
 
 <section>
-  <div class="eyebrow">Code search · 107 questions</div>
+  <div class="eyebrow">Separate code-search comparison · 107 questions</div>
   <h2>Same answers as Python Semble, ahead of ck and Probe</h2>
   <div class="plate">{dots(CODE, .1, .9, [.1,.3,.5,.7,.9], ['index','query'])}</div>
   {LEGEND}
@@ -314,7 +345,7 @@ a{{color:var(--acc)}}
 
 <footer>
   <p>{nm()} is MIT-licensed: crates <code><span class="nm">{NAME}</span>-core</code> and <code><span class="nm">{NAME}</span></code>. Ranking is a function-by-function port of <a href="https://github.com/MinishLab/semble">Semble</a> by MinishLab (MIT), with <a href="https://huggingface.co/minishlab/potion-code-16M">potion-code-16M</a> static embeddings and <a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2">all-MiniLM-L6-v2</a> (int8) for the chat rerank.</p>
-  <p>Hit@k: share of questions whose labelled answer is in the top k results. Chat sets: 45 labelled questions, plus 60 holdout questions never used for tuning. All timings on an Apple-silicon laptop under concurrent load.</p>
+  <p>Hit@k: share of questions whose labelled answer is in the top k results. The chat holdout questions were not used for tuning.</p>
 </footer>
 </main>
 <script>
