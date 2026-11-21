@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decode Memory — your coding agent remembers past work</title>
+<meta name="description" content="Notes your coding agent writes and finds again by meaning, with hooks that make it keep them.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #161615; --ink: #f2f1ea; --dim: #a3a29a; --faint: #6b6a63; --line: rgba(242,241,234,.14);
+    --glass: rgba(22,22,21,.8);
+    --acc: #f2f1ea; --acc-rgb: 242,241,234; --on-acc: #161615;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    --grot: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; border-radius: 0; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font-family: var(--grot); font-size: 17px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+
+  #field { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+  .page { position: relative; z-index: 1; }
+  .glass { background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px) saturate(1.1); -webkit-backdrop-filter: blur(14px) saturate(1.1); }
+
+  /* lockup */
+  .lockup { display: inline-flex; align-items: center; gap: 12px; font-size: 22px; letter-spacing: .02em; text-transform: uppercase; }
+  .lockup svg { width: 38px; height: 24px; fill: var(--acc); }
+  .lockup b { font-weight: 700; }
+  .lockup span { font-weight: 400; color: var(--dim); }
+
+  /* buttons: big, frosted, a fill that sweeps in on hover */
+  .btn { position: relative; display: inline-flex; align-items: center; gap: 10px; font: 500 16px/1 var(--grot); padding: 15px 22px; color: var(--ink); border: 1px solid var(--line); background: var(--glass); overflow: hidden; isolation: isolate; cursor: pointer; transition: color .25s, border-color .25s; }
+  /* Buttons carry a negative of the live background (drawn each frame into .neg): the plain one
+     sweeps it in on hover; the primary one shows it at rest and sweeps it out on hover. */
+  .btn .neg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; clip-path: inset(0 100% 0 0); transition: clip-path .45s cubic-bezier(.2,.8,.2,1); }
+  .btn:hover { color: #0d0d0c; border-color: var(--ink); }
+  .btn:hover .neg { clip-path: inset(0 0 0 0); }
+  .btn.primary { color: #0d0d0c; border-color: var(--ink); font-weight: 600; }
+  .btn.primary .neg { clip-path: inset(0 0 0 0); }
+  .btn.primary:hover { color: var(--ink); }
+  .btn.primary:hover .neg { clip-path: inset(0 0 0 100%); }
+  .btn .k { font-family: var(--mono); font-size: 13px; opacity: .6; }
+  .btn.sm { padding: 11px 16px; font-size: 15px; }
+
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 28px; }
+  .top nav { display: flex; gap: 8px; }
+
+  /* hero */
+  .hero { min-height: 860px; display: flex; flex-direction: column; justify-content: center; padding: 40px 28px 80px; max-width: 1240px; margin: 0 auto; }
+  .lead { text-shadow: 0 0 14px var(--bg), 0 0 4px var(--bg); font-size: clamp(19px, 2vw, 24px); color: #cfcec6; max-width: 34ch; margin: 22px 0 0; line-height: 1.35; font-weight: 400; }
+  .lead b { color: var(--ink); font-weight: 500; }
+  .hero-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 540px); gap: 48px; align-items: end; margin-top: 40px; }
+  .ctas { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 30px; }
+
+  /* the search panel: query types itself, results land */
+  .query { font-family: var(--mono); font-size: 14px; min-width: 0; overflow: hidden; }
+  .qin > span:last-child { white-space: nowrap; overflow: hidden; }
+  .qbar { display: flex; justify-content: space-between; gap: 12px; padding: 9px 14px; background: var(--acc); color: var(--on-acc); font-weight: 600; font-size: 13px; letter-spacing: .02em; }
+  .qbar i { font-style: normal; font-weight: 400; opacity: .6; }
+  .qin { padding: 16px 16px 14px; font-size: 17px; border-bottom: 1px solid var(--line); min-height: 58px; display: flex; gap: 10px; align-items: center; }
+  .qin .p { color: var(--acc); }
+  .caret { display: inline-block; width: .55em; height: 1.1em; background: var(--acc); animation: blink 1s steps(1) infinite; vertical-align: -3px; }
+  @keyframes blink { 50% { opacity: 0 } }
+  #qres { list-style: none; margin: 0; padding: 6px 0; min-height: 228px; }
+  #qres li { display: grid; grid-template-columns: 52px 1fr 92px; gap: 12px; align-items: center; padding: 10px 16px; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
+  #qres li.in { opacity: 1; transform: none; }
+  #qres .kind { font-size: 11px; color: var(--on-acc); background: rgba(var(--acc-rgb), .75); text-align: center; padding: 2px 0; }
+  #qres .kind.note { background: rgba(var(--acc-rgb), .45); }
+  #qres .path, #qres .snip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #qres li > span:nth-child(2) { min-width: 0; }
+  #qres .kind.doc { background: rgba(var(--acc-rgb), .45); }
+  #qres .kind.chat { background: rgba(var(--acc-rgb), .25); color: var(--ink); }
+  #qres .path { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #qres .snip { display: block; color: var(--faint); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #qres .sc { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 13px; }
+  #qres .sc i { flex: 1; height: 4px; background: rgba(var(--acc-rgb), .15); position: relative; }
+  #qres .sc i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--acc); }
+  .qfoot { display: flex; justify-content: space-between; padding: 10px 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12.5px; }
+
+  /* stacked headings */
+  .smear { font-family: var(--grot); font-weight: 600; font-stretch: 86%; text-transform: uppercase; line-height: .98; letter-spacing: -.01em; color: var(--acc); margin: 0; user-select: none; }
+  .smear { position: relative; }
+  .smear .strip { position: absolute; left: 0; top: 0; right: 0; overflow: hidden; will-change: transform, height; }
+  .smear .strip span { display: block; white-space: nowrap; will-change: transform; }
+  .smear .real { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  /* numbers */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .stat { padding: 34px 28px 30px; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat .n { font-size: clamp(54px, 6.4vw, 96px); font-weight: 600; font-stretch: 86%; line-height: .9; letter-spacing: -.03em; }
+  .stat .n small { font-size: .5em; font-weight: 400; color: var(--dim); margin-left: 2px; }
+  .stat .w { font-size: 19px; margin-top: 12px; font-weight: 500; }
+  .stat .d { font-family: var(--mono); font-size: 13px; color: var(--dim); margin-top: 6px; }
+  .stat.pending .n { color: var(--faint); }
+  .parity { padding: 18px 28px; font-size: 16px; color: var(--dim); text-align: center; }
+  .parity b { color: var(--ink); font-weight: 500; }
+
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 28px; }
+  section { padding: 120px 0 60px; }
+  .label { font-family: var(--mono); color: var(--dim); font-size: 14px; margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 40px; }
+  .card { min-width: 0; padding: 26px 26px 22px; }
+  .card h3 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -.01em; display: flex; justify-content: space-between; align-items: baseline; }
+  .card h3 i { font-style: normal; font-family: var(--mono); font-size: 13px; color: var(--dim); font-weight: 400; }
+  .card p { margin: 8px 0 18px; color: var(--dim); }
+  .code { position: relative; }
+  pre { margin: 0; padding: 16px 18px; background: rgba(0,0,0,.35); border-left: 3px solid var(--acc); overflow-x: auto; font: 14px/1.7 var(--mono); }
+  pre .c { color: var(--faint); }
+  .copy { position: absolute; top: 8px; right: 8px; }
+  .ph-old { margin-top: 40px; border: 1px dashed var(--line); padding: 60px; text-align: center; color: var(--dim); background: var(--glass); min-height: 900px; }
+  footer { padding: 40px 0 60px; color: var(--dim); font-size: 15px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--line); margin-top: 80px; }
+
+  @media (max-width: 900px) {
+    .hero-row { grid-template-columns: minmax(0, 1fr); }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .stat:nth-child(2) { border-right: 0; }
+    .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  }
+  @media (max-width: 640px) {
+    .top { padding: 16px; }
+    .top nav .hide-s { display: none; }
+    .lockup { font-size: 19px; }
+    .hero { padding: 24px 16px 60px; min-height: 0; }
+    .wrap { padding: 0 16px; }
+    .grid { grid-template-columns: 1fr; }
+    .stat { padding: 24px 16px; }
+    .stat .w { font-size: 16px; }
+    #qres li { grid-template-columns: 46px 1fr 64px; padding: 9px 12px; gap: 8px; }
+    .qin { font-size: 15px; }
+    section { padding: 80px 0 40px; }
+  }
+  /* charts */
+  :root { --semble: #ef8a4c; }
+  .intro { color: var(--dim); max-width: 62ch; margin: 18px 0 0; }
+  .intro a { text-decoration: underline; text-underline-offset: 3px; }
+  .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 40px; }
+  .chart { margin: 0; padding: 24px 24px 20px; min-width: 0; }
+  .chart.wide { grid-column: 1 / -1; }
+  .chart h3 { margin: 0; font-size: 22px; font-weight: 600; }
+  .chart .sub { margin: 4px 0 14px; color: var(--dim); font-size: 15px; }
+  .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart svg text { font: 12px var(--mono); fill: var(--dim); }
+  .chart svg text.lab { fill: var(--ink); }
+  .chart svg text.strong { fill: var(--acc); font-weight: 600; }
+  .chart .grid line { stroke: var(--line); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font: 12.5px var(--mono); color: var(--dim); }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 7px; vertical-align: -1px; }
+  .small { font: 13px var(--mono); color: var(--faint); margin-top: 18px; }
+  @media (max-width: 760px) { .charts { grid-template-columns: minmax(0, 1fr); } .chart { padding: 18px 16px; } }
+  /* memory loop */
+  .tron { margin: 40px 0 0; padding: 20px; }
+  .tron svg { width: 100%; height: auto; display: block; }
+  .tron .box { fill: rgba(10,10,10,.72); stroke: rgba(var(--acc-rgb), .55); stroke-width: 1.5; }
+  .tron .tick { stroke: var(--acc); stroke-width: 3; fill: none; }
+  .tron .wire { stroke: rgba(var(--acc-rgb), .16); stroke-width: 2; fill: none; }
+  .tron .trail { stroke: var(--acc); stroke-width: 3; fill: none; stroke-linecap: round; filter: url(#glow); }
+  .tron .cycle { fill: #fff; filter: url(#glow); }
+  .tron text { font-family: var(--mono); fill: var(--dim); font-size: 13px; }
+  .tron text.n { fill: rgba(var(--acc-rgb), .7); font-size: 12px; }
+  .tron text.t { fill: var(--ink); font-family: var(--sans); font-size: 20px; font-weight: 600; }
+  .tron text.k { fill: var(--acc); font-size: 13px; }
+  .tron .lit .box { stroke: var(--acc); }
+  .tnote { margin: 12px 0 0; }
+  .mgrid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 18px; margin-top: 18px; }
+  .note pre { margin: 0; font: 13px/1.7 var(--mono); color: var(--dim); white-space: pre-wrap; }
+  .note pre b { color: var(--acc); font-weight: 500; }
+  @media (max-width: 760px) { .mgrid { grid-template-columns: minmax(0, 1fr); } .tron { padding: 12px; } }
+  /* split pages */
+  .notecard pre { margin: 0; padding: 16px 18px; background: none; border: 0; font: 14px/1.75 var(--mono); color: var(--dim); white-space: pre-wrap; }
+  .notecard pre b { color: var(--acc); font-weight: 500; }
+  .problem { margin: 18px 0 0; color: var(--dim); max-width: 46ch; text-shadow: 0 0 14px var(--bg), 0 0 4px var(--bg); }
+  .steps { list-style: none; counter-reset: s; margin: 40px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .steps li { counter-increment: s; padding: 24px 24px 22px; min-width: 0; }
+  .steps li::before { content: "0" counter(s); display: block; font: 12px var(--mono); color: rgba(var(--acc-rgb), .7); margin-bottom: 10px; }
+  .steps h3 { margin: 0 0 8px; font-size: 22px; font-weight: 600; }
+  .steps p { margin: 0; color: var(--dim); }
+  .xlink { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; margin-top: 40px; padding: 28px; }
+  .xlink h3 { margin: 0 0 6px; font-size: 26px; font-weight: 600; }
+  .xlink p { margin: 0; color: var(--dim); max-width: 60ch; }
+  .req { font: 13px/1.6 var(--mono); color: var(--dim); margin-top: 18px; max-width: 80ch; text-shadow: 0 0 12px var(--bg), 0 0 4px var(--bg), 0 0 2px var(--bg); }
+  .code pre { padding-right: 84px; }
+  .wide-chart { margin-top: 40px; }
+  .wide-chart svg { max-width: 720px; }
+  footer a { text-decoration: underline; text-underline-offset: 3px; }
+  @media (max-width: 760px) { .code pre { padding: 46px 14px 14px; } .steps { grid-template-columns: minmax(0, 1fr); } .xlink { padding: 20px 16px; } }
+</style>
+</head>
+<body>
+<canvas id="field" aria-hidden="true"></canvas>
+<svg width="0" height="0" style="position:absolute"><symbol id="mark" viewBox="0 0 981 614"><path fill-rule="evenodd" d="M0 0h981v72H0z M0 542h981v72H0z M71 149h382v316H71v-74h308V223H71z M528 149h382v74H602v168h308v74H528z"/></symbol></svg>
+
+<div class="page">
+  <header class="top">
+    <a class="lockup" href="#"><svg><use href="#mark"/></svg><b>decode</b><span>memory</span></a>
+    <nav><a class="btn sm hide-s" href="#how">How it works</a><a class="btn sm hide-s" href="#results">Results</a><a class="btn sm hide-s" href="https://github.com/tonioriol/decode-plugins">GitHub ↗</a><a class="btn sm primary" href="#install">Install</a></nav>
+  </header>
+
+  <div class="hero">
+    <h1 class="smear" data-smear data-strips="9" data-size="clamp(36px, 8.6vw, 128px)">Decode Memory</h1>
+    <div class="hero-row">
+      <div>
+        <p class="lead"><b>Your coding agent remembers past work.</b> One short note per topic, in your repository. The next session finds it by meaning.</p>
+        <p class="problem">Without it, every session starts from zero: the agent digs through code and old chats to relearn what was already done and decided.</p>
+        <div class="ctas"><a class="btn primary" href="#install">Install the plugin <span class="k">→</span></a><a class="btn" href="#how">How it works</a></div>
+      </div>
+      <div class="query glass notecard" aria-label="Example note">
+        <div class="qbar"><span>memory/&lt;date&gt;-&lt;topic&gt;/context.md</span><span><i>one per topic</i></span></div>
+<pre><b>---</b>
+title: Rust search engine
+status: active
+<b>---</b>
+<b>## TASK</b>   goal, done when
+<b>## SPEC</b>   link to the approved design
+<b>## FILES</b>  the files that matter now
+<b>## PLAN</b>   where work resumes, traps
+<b>## LOG</b>
+<b>### 2026-11-21 12:06</b>  warm query 3.7× less CPU
+- why, how, evidence, commit</pre>
+        <div class="qfoot"><span>plain Markdown, committed with git</span><span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="stats glass">
+      <div class="stat"><div class="n">25<small>/30</small></div><div class="w">questions fully right</div><div class="d">from notes · 17/30 from raw transcripts</div></div>
+      <div class="stat"><div class="n">2.5<small>×</small></div><div class="w">fewer tokens</div><div class="d">138k vs 341k to answer, median</div></div>
+      <div class="stat"><div class="n">≈280</div><div class="w">tokens per session</div><div class="d">the list of open topics at start</div></div>
+      <div class="stat"><div class="n">3.1<small>×</small></div><div class="w">fewer than chat search</div><div class="d">138k vs 423k · 7/30 right there</div></div>
+    </div>
+    <div class="parity">30 real questions about past work. <b>One fresh agent per question, graded blind.</b></div>
+  </div>
+
+  <main class="wrap">
+    <section id="how">
+      <p class="label">01 / how it works</p>
+      <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">How it works</h2>
+      <p class="intro">A skill tells the agent how to keep notes; hooks make sure it does. Here is one loop, with what each step costs in tokens.</p>
+      <figure class="tron glass">
+        <svg id="tron" role="img" aria-label="Memory loop: session starts, agent works, stop hook, note committed, back to the next session; before a condense the note is saved first"></svg>
+        <p class="small tnote">≈ tokens at about 4 characters per token, measured on our own notes: the session-start text is 1,116 characters, the skill 11,759, the median note 11,588 and the median log entry 1,217.</p>
+      </figure>
+    </section>
+
+    <section id="results">
+      <p class="label">02 / results</p>
+      <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Results</h2>
+      <p class="intro">We asked 30 real questions about earlier work that has a note, such as why a decision was made or what a measurement showed. Each question went to a fresh agent with one source to search, and a separate agent graded the answers blind.</p>
+      <figure class="chart glass wide-chart">
+        <h3>What you get back</h3>
+        <p class="sub">Median input tokens to answer, and how many answers were fully right.</p>
+        <svg id="recallcost" role="img" aria-label="Tokens to answer a question about past work, by source"></svg>
+      </figure>
+      <div class="ctas"><a class="btn" href="https://github.com/tonioriol/decode-plugins/tree/main/bench/memory">Run the benchmark on your own notes <span class="k">↗</span></a></div>
+    </section>
+
+    <section id="install">
+      <p class="label">03 / install</p>
+      <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Install</h2>
+      <div class="grid">
+        <div class="card glass"><h3>Claude Code <i>plugin</i></h3><p>Installs semantic-search with it.</p>
+          <div class="code"><pre><span class="c"># once</span>
+/plugin marketplace add tonioriol/decode-plugins
+/plugin install memory@decode-plugins</pre><button class="btn sm copy">Copy</button></div></div>
+        <div class="card glass"><h3>Codex <i>plugin</i></h3><p>Codex installs each plugin by name.</p>
+          <div class="code"><pre>codex plugin marketplace add \
+  tonioriol/decode-plugins
+codex plugin add semantic-search@decode-plugins
+codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</button></div></div>
+      </div>
+      <p class="req">macOS or Linux (Windows through WSL). Needs Bash, curl and Python 3; the hooks also need Git, jq and ripgrep. Notes stay in your repository's memory/ folder.</p>
+      <a class="xlink glass" href="semantic.html"><div><h3>Built on Decode Semantic</h3><p>Memory finds notes with Decode Semantic, a search engine that ranks by meaning and runs on your machine. It searches code on its own, too.</p></div><span class="btn">Decode Semantic <span class="k">→</span></span></a>
+    </section>
+    <footer><span>decode/memory · MIT · <a href="https://github.com/tonioriol/decode-plugins">decode-plugins on GitHub</a></span><a href="semantic.html">Decode Semantic →</a></footer>
+  </main>
+</div>
+
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x))
+  const accRGB = () => getComputedStyle(document.documentElement).getPropertyValue("--acc-rgb").trim()
+
+  // ---------- 1. background ----------
+  // A whole-screen ASCII render (glyph dither) of a perspective floor grid and a soft noise texture.
+  // The pointer bends the wave field that modulates all of it, moving it leaves ripples, a click sends a big one.
+  const RAMP = " `.-':_,^=;><+!rc*/z?sLTv)J7(|Fi{C}fI31tlu[neoZ5Yxjya]2ESwqkP6h9d4VpOGbUAKXHm8RD#$Bg0MNWQ%&@"
+  const cv = document.getElementById("field"), cx = cv.getContext("2d")
+  const sc = document.createElement("canvas"), sx = sc.getContext("2d", { willReadFrequently: true })
+  let W, H, fs, cw, ch, cols, rows
+  // noise texture, tiled: two layers scrolled against each other give a slow, living grain
+  const NT = 128, noise = new Float32Array(NT * NT)
+  {
+    const r = new Float32Array(32 * 32).map(() => Math.random()), at = (x, y) => r[(y & 31) * 32 + (x & 31)]
+    const sm = t => t * t * (3 - 2 * t)
+    for (let y = 0; y < NT; y++) for (let x = 0; x < NT; x++) {
+      let v = 0, a = .6
+      for (const f of [8, 16]) {
+        const fx = x / NT * f, fy = y / NT * f, xi = Math.floor(fx), yi = Math.floor(fy), u = sm(fx - xi), w = sm(fy - yi), m = f
+        const A = at(xi % m, yi % m), B = at((xi + 1) % m, yi % m), C = at(xi % m, (yi + 1) % m), D = at((xi + 1) % m, (yi + 1) % m)
+        v += a * (A + (B - A) * u + (C - A) * w + (A - B - C + D) * u * w); a = .4
+      }
+      noise[y * NT + x] = v
+    }
+  }
+  function size() {
+    const dpr = Math.min(2, devicePixelRatio || 1)
+    W = innerWidth; H = innerHeight
+    cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    fs = W < 640 ? 10 : 12
+    cx.font = `${fs}px "JetBrains Mono", ui-monospace, Menlo, monospace`; cx.textBaseline = "top"
+    cw = cx.measureText("M").width; ch = fs
+    cols = Math.ceil(W / cw); rows = Math.ceil(H / ch)
+    sc.width = cols; sc.height = rows
+  }
+  // pointer, eased like a tilt: -1..1 across the viewport
+  const tilt = { x: 0, y: 0, tx: 0, ty: 0 }, ripples = []
+  let phase = 0
+  let lastDrop = 0, stir = 0
+  const drop = (x, y, a, life) => { ripples.push({ x: x / innerWidth, y: y / innerHeight, t: performance.now(), a, life }); if (ripples.length > 14) ripples.shift() }
+  addEventListener("pointermove", e => {
+    tilt.tx = e.clientX / innerWidth * 2 - 1; tilt.ty = e.clientY / innerHeight * 2 - 1
+    stir = Math.min(1, stir + Math.hypot(e.movementX || 0, e.movementY || 0) / 300)
+    const now = performance.now(); if (now - lastDrop > 90) { lastDrop = now; drop(e.clientX, e.clientY, .45, 1.4) }
+  })
+  addEventListener("pointerdown", e => drop(e.clientX, e.clientY, 1, 2.5))
+
+  function scene(t, dt) {
+    // draw the scene in screen pixels into a cols×rows buffer (one pixel per character cell)
+    sx.setTransform(1 / cw, 0, 0, 1 / ch, 0, 0)
+    sx.globalCompositeOperation = "source-over"
+    sx.fillStyle = "#000"; sx.fillRect(0, 0, W, H)
+    sx.globalCompositeOperation = "lighter"
+    // floor grid, 90s VR: vanishing point follows the pointer a little
+    const hz = H * .6 + tilt.y * 24, vx = W / 2 + tilt.x * 120
+    sx.lineWidth = ch * .9
+    for (let k = -14; k <= 14; k++) {
+      const xb = vx + k * W * .14
+      const g = sx.createLinearGradient(0, hz, 0, H); g.addColorStop(0, "rgba(255,255,255,0)"); g.addColorStop(1, "rgba(255,255,255,.2)")
+      sx.strokeStyle = g; sx.beginPath(); sx.moveTo(vx, hz); sx.lineTo(xb, H); sx.stroke()
+    }
+    for (let k = 0; k < 14; k++) {
+      const z = ((k + (t * .6) % 1) / 14), y = hz + (H - hz) * z * z
+      sx.strokeStyle = `rgba(255,255,255,${(.03 + z * z * .17).toFixed(3)})`
+      sx.beginPath(); sx.moveTo(0, y); sx.lineTo(W, y); sx.stroke()
+    }
+    return sx.getImageData(0, 0, cols, rows).data
+  }
+
+  function field(t, dt) {
+    const e = clamp(dt * 3)
+    tilt.x += (tilt.tx - tilt.x) * e; tilt.y += (tilt.ty - tilt.y) * e
+    const img = scene(t, dt)
+    stir *= Math.exp(-dt * 1.5); phase += dt * stir * 3
+    const j0 = tilt.x * 1.6, k0 = tilt.y * 1.6, A = .3 * t + phase, B = .15 * t + phase * .6, C = .5 * t - phase
+    const now = performance.now(), rip = ripples.map(r => ({ x: r.x, y: r.y, a: r.a, life: r.life, age: (now - r.t) / 1000 })).filter(r => r.age < r.life)
+    const n1x = (t * 2.2) | 0, n1y = (t * 1.1) | 0, n2x = (-t * 1.4) | 0, n2y = (t * 2.6) | 0
+    const L = 12, bins = Array.from({ length: L }, () => []), top = RAMP.length - 1
+    for (let j = 0; j < rows; j++) {
+      const v = j / rows
+      for (let i = 0; i < cols; i++) {
+        const u = i / cols
+        // the wave field: three interfering sines whose frequencies follow the pointer
+        const h = .55 * (.5 * Math.sin(u * (3 + 1.5 * j0) + v * 1.5 * k0 + A) + .5)
+          + .25 * (.5 * Math.sin(v * (2.5 + .8 * k0) + B + u * (1 + .8 * j0)) + .5)
+          + .2 * (.5 * Math.sin((u + v) * (4 + (j0 + k0) * .6) + C) + .5)
+        let r = 0
+        for (const q of rip) {
+          const dx = u - q.x, dy = (v - q.y) * (H / W), d = Math.sqrt(dx * dx + dy * dy), off = Math.abs(d - .45 * q.age)
+          if (off < .07) r += Math.sin(40 * d - 8 * q.age) * (1 - q.age / q.life) * (1 - off / .07) * .5 * q.a
+        }
+        const s = img[(j * cols + i) * 4] / 255
+        const n = noise[((j + n1y) & 127) * NT + ((i + n1x) & 127)] * noise[((j + n2y) & 127) * NT + ((i + n2x) & 127)]
+        const b = clamp(s * (.55 + (h + r) * .6) + n * .2 * (.35 + (h + r) * 1.1) + Math.max(0, r) * .12)
+        if (b < .045) continue
+        bins[Math.min(L - 1, (b * L) | 0)].push(RAMP[Math.min(top, (b * top) | 0)], i * cw, j * ch)
+      }
+    }
+    cx.clearRect(0, 0, W, H)
+    const rgb = accRGB()
+    bins.forEach((bin, l) => {
+      if (!bin.length) return
+      cx.fillStyle = `rgba(${rgb},${(.14 + (l / L) * .8).toFixed(3)})`
+      for (let n = 0; n < bin.length; n += 3) cx.fillText(bin[n], bin[n + 1], bin[n + 2])
+    })
+    negatives()
+  }
+  // the negative inside each button: a solid ink fill with the glyphs under it punched out
+  const negs = [...document.querySelectorAll(".btn")].map(b => {
+    const c = document.createElement("canvas"); c.className = "neg"; b.prepend(c); return [b, c, c.getContext("2d")]
+  })
+  function negatives() {
+    const dpr = cv.width / W, ink = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim()
+    for (const [b, c, g] of negs) {
+      const r = b.getBoundingClientRect()
+      if (r.bottom < 0 || r.top > H || !r.width) continue
+      const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr)
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h }
+      g.globalCompositeOperation = "source-over"; g.fillStyle = ink; g.fillRect(0, 0, w, h)
+      g.globalCompositeOperation = "destination-out"; g.drawImage(cv, r.left * dpr, r.top * dpr, w, h, 0, 0, w, h)
+    }
+  }
+
+  // ---------- 2. stacked headings ----------
+  // The full title sits at the bottom. Above it, copies of the same title are born from behind it:
+  // each copy shows only its top slice, all slices the same height, so every copy sits the same
+  // distance above the one in front. Scroll lifts the title; each copy chases the one in front on a
+  // stiff spring, so the stack stretches like a wave and snaps back quickly, then just floats.
+  const smears = [...document.querySelectorAll("[data-smear]")].map(el => {
+    const text = el.textContent.trim(), N = +(el.dataset.strips || 11)
+    el.style.fontSize = el.dataset.size
+    el.innerHTML = `<span class="real">${text}</span>`
+    const strips = []
+    for (let i = 0; i < N; i++) {
+      const s = document.createElement("span"); s.className = "strip"; s.setAttribute("aria-hidden", "true")
+      const inner = document.createElement("span"); inner.textContent = text
+      s.appendChild(inner); el.appendChild(s); strips.push({ s, inner })
+    }
+    const st = { el, strips, N, step: N > 9 ? .12 : .14, cap: .16, shown: 0, y: new Float32Array(N), v: new Float32Array(N) }
+    capLine(st)
+    return st
+  })
+  // distance from the top of the line box to the top of the capitals, in em
+  function capLine(st) {
+    const cs = getComputedStyle(st.el), px = parseFloat(cs.fontSize)
+    const g = document.createElement("canvas").getContext("2d")
+    g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
+    const m = g.measureText("DECODE")
+    if (m.fontBoundingBoxAscent) {
+      const lead = (parseFloat(cs.lineHeight) - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2
+      st.cap = (lead + m.fontBoundingBoxAscent - m.actualBoundingBoxAscent) / px
+    }
+    st.el.style.height = (1 - st.cap + (st.N - 1) * st.step).toFixed(4) + "em"
+  }
+  document.fonts.ready.then(() => smears.forEach(capLine))
+  function drawSmears(t, dt) {
+    for (const s of smears) {
+      const box = s.el.getBoundingClientRect()
+      const raw = (innerHeight * .45 - box.top) / innerHeight
+      if (s.rest === undefined) s.rest = Math.max(0, raw + scrollY / innerHeight)
+      const target = clamp(raw - s.rest, -.6, 1.2)
+      const steps = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / steps
+      for (let k = 0; k < steps; k++) for (let i = s.N - 1; i >= 0; i--) {
+        const goal = i === s.N - 1 ? target : s.y[i + 1], K = i === s.N - 1 ? 700 : 900
+        s.v[i] += ((goal - s.y[i]) * K - s.v[i] * 2 * Math.sqrt(K) * .8) * h
+        s.y[i] += s.v[i] * h
+      }
+      s.shown = Math.min(1, s.shown + dt / 1.6)
+      const intro = 1 - (1 - s.shown) ** 3
+      const H = 1 - s.cap + (s.N - 1) * s.step
+      // the main line: a full line box, lifted by the scroll
+      const main = s.strips[s.N - 1], mainTop = H - 1 - s.y[s.N - 1] * .55
+      main.s.style.height = "1em"
+      main.s.style.transform = `translateY(${mainTop.toFixed(4)}em)`
+      let edge = mainTop + s.cap  // top of the capitals of the copy in front
+      for (let i = s.N - 2; i >= 0; i--) {
+        const { s: el, inner } = s.strips[i]
+        const lag = s.y[i] - s.y[i + 1]
+        const hh = clamp(s.step * (1 + lag * 14 + Math.sin(t * 1.4 + i * .9) * .15) * intro, .004, .6)
+        edge -= hh
+        el.style.height = hh.toFixed(4) + "em"
+        el.style.transform = `translateY(${edge.toFixed(4)}em)`
+        inner.style.transform = `translateY(${(-s.cap).toFixed(4)}em)`
+      }
+    }
+  }
+
+  // ---------- 3. the search panel: real queries and the engine's real top hits ----------
+  // Recorded 2026-11-21 by running `decode-semantic search "<query>" --limit 3` in a checkout of
+  // github.com/tonioriol/decode-plugins (commit 55ad616). Scores are the engine's own fused scores.
+  const Q = [
+    { q: "how are the keyword and vector scores combined", r: [
+      ["code", "engine/decode-semantic-core/src/search.rs:1", "semantic and BM25 candidates fused by reciprocal rank", .0194],
+      ["code", "engine/decode-semantic-core/src/rerank.rs:1", "Query-dependent scoring of a small candidate pool", .0154],
+      ["code", "engine/decode-semantic-core/src/ranking.rs:334", "let keywords = query_keywords(\"Where are the dependencies…", .0149]] },
+    { q: "which files are skipped when indexing", r: [
+      ["code", "engine/decode-semantic/src/files.rs:1", "Which files of a folder the index holds.", .0236],
+      ["code", "engine/decode-semantic/src/engine.rs:150", "let total: usize = listed.iter().map(|(_, files)| files.len())…", .0186],
+      ["code", "engine/decode-semantic-core/src/sync.rs:1", "Keeping a source index in step with a file listing", .0172]] },
+    { q: "how does a note in the current project rank above other projects", r: [
+      ["code", "engine/decode-semantic/src/serve.rs:671", "The same note in two projects: the caller's ranks first", .0197],
+      ["doc", "plugins/memory/skills/memory/SKILL.md:31", "searches the current project's memory/ and, ranked lower, docs/", .016],
+      ["code", "plugins/memory/scripts/server.sh:7", "--folder memory --folder docs=0.5", .015]] },
+  ]
+  const qt = document.getElementById("qtext"), qr = document.getElementById("qres"), qms = document.getElementById("qms")
+  const sleep = ms => new Promise(r => setTimeout(r, ms))
+  let top = 1
+  const row = ([k, p, s, sc]) => `<li><span class="kind ${k}">${k}</span><span><span class="path" title="${p}">${p.split("/").slice(-2).join("/")}</span><span class="snip">${s}</span></span><span class="sc"><i style="--w:${(sc / top) * 100}%"></i>${(sc / top).toFixed(2)}</span></li>`
+  async function demo() {
+    for (let n = 0; ; n = (n + 1) % Q.length) {
+      const d = Q[n]
+      qr.innerHTML = ""; qms.textContent = ""
+      for (let i = 0; i <= d.q.length; i++) { qt.textContent = d.q.slice(0, i); await sleep(38 + Math.random() * 40) }
+      await sleep(260)
+      top = d.r[0][3]; qr.innerHTML = d.r.map(row).join(""); qms.textContent = "vs top hit"
+      const lis = [...qr.children]
+      for (const li of lis) { await sleep(90); li.classList.add("in") }
+      await sleep(3200)
+      for (let i = d.q.length; i >= 0; i--) { qt.textContent = d.q.slice(0, i); await sleep(14) }
+    }
+  }
+
+  // ---------- loop ----------
+  let last = performance.now(), t0 = last
+  function frame(now) {
+    const t = (now - t0) / 1000, dt = Math.min(.05, (now - last) / 1000); last = now
+    field(t, dt); drawSmears(t, dt)
+    requestAnimationFrame(frame)
+  }
+  addEventListener("resize", size)
+  size()
+  if (reduce) { smears.forEach(s => s.shown = 1); field(4, 0); drawSmears(0, 0); if (qt) { qt.textContent = Q[0].q; top = Q[0].r[0][3]; qr.innerHTML = Q[0].r.map(row).join(""); [...qr.children].forEach(l => l.classList.add("in")) } }
+  else { requestAnimationFrame(frame); if (qt) demo() }
+  window.__pointer = (x, y) => { tilt.tx = x / innerWidth * 2 - 1; tilt.ty = y / innerHeight * 2 - 1 } // preview hook
+
+  document.querySelectorAll(".copy").forEach(b => b.addEventListener("click", () => {
+    navigator.clipboard?.writeText(b.previousElementSibling.textContent.replace(/^# once\n/, ""))
+    b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy", 1400)
+  }))
+})()
+
+// charts: Semble README's two benchmark charts, redrawn
+const NS = "http://www.w3.org/2000/svg"
+const el = (tag, attrs, parent, text) => {
+  const n = document.createElementNS(NS, tag)
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v)
+  if (text != null) n.textContent = text
+  parent.appendChild(n)
+  return n
+}
+const log = Math.log10
+const frame = (svg, w, h, m) => { svg.setAttribute("viewBox", `0 0 ${w} ${h}`); return { x0: m.l, x1: w - m.r, y0: h - m.b, y1: m.t } }
+const M = { l: 40, r: 16, t: 26, b: 36 }
+
+if (document.getElementById("cold")) { // quality vs cold index time; grey rows = Semble benchmarks/README.md "Main results" Index column
+  const published = [["CodeRankEmbed", 0.839, 116000], ["ColGREP", 0.693, 5400], ["BM25", 0.673, 47], ["zvec-grep", 0.670, 3400], ["ck", 0.642, 96000], ["codebase-memory-mcp", 0.630, 454], ["grepai", 0.561, 35000]]
+  const measured = [["Semble", 0.8547, 658.5, "--semble"], ["Decode Semantic", 0.8553, 123.6, "--acc"]]
+  const svg = document.getElementById("cold"), f = frame(svg, innerWidth < 600 ? 380 : 520, 320, M)
+  const x = (ms) => f.x0 + ((log(ms) - 1) / 5) * (f.x1 - f.x0), y = (v) => f.y0 - v * (f.y0 - f.y1)
+  const g = el("g", { class: "grid" }, svg)
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) { el("line", { x1: f.x0, x2: f.x1, y1: y(v), y2: y(v) }, g); el("text", { x: f.x0 - 6, y: y(v) + 4, "text-anchor": "end" }, svg, v.toFixed(2)) }
+  for (const [ms, t] of [[10, "10 ms"], [100, "100 ms"], [1000, "1 s"], [10000, "10 s"], [100000, "100 s"], [1000000, "1000 s"]]) el("text", { x: x(ms), y: f.y0 + 18, "text-anchor": "middle" }, svg, t)
+  el("text", { x: f.x0 - 34, y: f.y1 - 14 }, svg, "NDCG@10")
+  for (const [name, v, ms] of published) {
+    el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 5, fill: "var(--faint)", stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, index ${ms >= 1000 ? ms / 1000 + " s" : ms + " ms"} (published)`)
+    if (["CodeRankEmbed", "BM25", "grepai"].includes(name)) el("text", { x: x(ms) + (name === "CodeRankEmbed" ? -20 : 8), y: y(v) + (name === "CodeRankEmbed" ? -10 : 4), "text-anchor": name === "CodeRankEmbed" ? "middle" : "start", class: "lab" }, svg, name)
+  }
+  for (const [name, v, ms, c] of measured) el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 6.5, fill: `var(${c})`, stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, index ${ms} ms`)
+  el("text", { x: x(123.6) - 2, y: y(0.8553) - 14, "text-anchor": "middle", class: "lab strong" }, svg, "Decode Semantic 124 ms")
+  el("text", { x: x(658.5) + 10, y: y(0.8547) + 18, class: "lab" }, svg, "Semble 659 ms")
+}
+if (document.getElementById("scatter")) { // quality vs speed; grey rows = Semble benchmarks/README.md "Main results"
+  const published = [["CodeRankEmbed", 0.839, 16], ["ColGREP", 0.693, 122], ["BM25", 0.673, 0.17], ["zvec-grep", 0.670, 391], ["ck", 0.642, 187], ["codebase-memory-mcp", 0.630, 46], ["grepai", 0.561, 48], ["probe", 0.387, 207], ["cs", 0.200, 22], ["ripgrep", 0.126, 14]]
+  const measured = [["Semble", 0.8547, 1.92, "--semble"], ["Decode Semantic", 0.8553, 0.34, "--acc"]]
+  const svg = document.getElementById("scatter"), f = frame(svg, innerWidth < 600 ? 380 : 520, 320, M)
+  const x = (ms) => f.x0 + ((log(ms) + 1) / 4) * (f.x1 - f.x0), y = (v) => f.y0 - v * (f.y0 - f.y1)
+  const g = el("g", { class: "grid" }, svg)
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) { el("line", { x1: f.x0, x2: f.x1, y1: y(v), y2: y(v) }, g); el("text", { x: f.x0 - 6, y: y(v) + 4, "text-anchor": "end" }, svg, v.toFixed(2)) }
+  for (const ms of [0.1, 1, 10, 100, 1000]) el("text", { x: x(ms), y: f.y0 + 18, "text-anchor": "middle" }, svg, ms >= 1 ? `${ms} ms` : `${ms}`)
+  el("text", { x: f.x0 - 34, y: f.y1 - 14 }, svg, "NDCG@10")
+  for (const [name, v, ms] of published) {
+    el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 5, fill: "var(--faint)", stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, ${ms} ms (published)`)
+    if (["CodeRankEmbed", "BM25", "ripgrep"].includes(name)) el("text", { x: x(ms) + 8, y: y(v) + 4, class: "lab" }, svg, name)
+  }
+  for (const [name, v, ms, c] of measured) el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 6.5, fill: `var(${c})`, stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, ${ms} ms`)
+  el("text", { x: x(0.34) - 2, y: y(0.8553) - 14, "text-anchor": "middle", class: "lab strong" }, svg, "Decode Semantic 0.34 ms")
+  el("text", { x: x(1.92) + 10, y: y(0.8547) + 18, class: "lab" }, svg, "Semble 1.92 ms")
+}
+if (document.getElementById("recall")) { // recall vs tokens; rerun of Semble's token-efficiency script
+  const budgets = [500, 1000, 2000, 4000, 8000, 16000, 32000]
+  const series = [["grep, then read", [0.001, 0.008, 0.039, 0.093, 0.216, 0.378, 0.589], "--faint"], ["Semble", [0.843, 0.921, 0.963, 0.989, 0.995, 0.996, 0.996], "--semble"], ["Decode Semantic", [0.842, 0.923, 0.964, 0.989, 0.994, 0.995, 0.995], "--acc"]]
+  const svg = document.getElementById("recall"), f = frame(svg, innerWidth < 600 ? 380 : 900, innerWidth < 600 ? 300 : 300, M)
+  const x = (t) => f.x0 + ((log(t) - log(500)) / (log(32000) - log(500))) * (f.x1 - f.x0), y = (v) => f.y0 - v * (f.y0 - f.y1)
+  const g = el("g", { class: "grid" }, svg)
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) { el("line", { x1: f.x0, x2: f.x1, y1: y(v), y2: y(v) }, g); el("text", { x: f.x0 - 6, y: y(v) + 4, "text-anchor": "end" }, svg, `${v * 100}%`) }
+  for (const t of budgets) el("text", { x: x(t), y: f.y0 + 18, "text-anchor": "middle" }, svg, t >= 1000 ? `${t / 1000}k` : t)
+  el("text", { x: f.x1, y: f.y0 + 32, "text-anchor": "end" }, svg, "tokens read")
+  for (const [name, vals, c] of series) {
+    // Semble and Decode Semantic differ by at most 0.2 points: Semble is drawn as a wide band under the thin blue line
+    const band = name === "Semble"
+    el("polyline", { points: vals.map((v, i) => `${x(budgets[i])},${y(v)}`).join(" "), fill: "none", stroke: `var(${c})`, "stroke-width": band ? 10 : 2, "stroke-opacity": band ? 0.45 : 1, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg)
+    if (!band) vals.forEach((v, i) => el("title", {}, el("circle", { cx: x(budgets[i]), cy: y(v), r: 4, fill: `var(${c})`, stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${(v * 100).toFixed(1)}% at ${budgets[i].toLocaleString()} tokens`))
+  }
+  el("text", { x: x(500) + 6, y: y(0.842) + 22, class: "lab strong" }, svg, "84% found within 500 tokens")
+  el("text", { x: x(32000) - 4, y: y(0.589) + 20, "text-anchor": "end", class: "lab" }, svg, "grep + read: 59% at 32k")
+}
+if (document.getElementById("res")) { // memory and CPU: Python Semble vs Decode Semantic, 19 speed-benchmark repos, 3 runs, means
+  const rows = [["Peak memory", 167, 66, "MB", 2.4], ["Idle memory, index loaded", 129, 40, "MB", 3.3], ["CPU, whole run", 0.93, 0.40, "s", 2.6]]
+  const svg = document.getElementById("res"), narrow = innerWidth < 600, f = frame(svg, narrow ? 380 : 900, narrow ? 260 : 230, { l: narrow ? 8 : 230, r: 70, t: 10, b: 10 })
+  const band = (f.y0 - f.y1) / rows.length
+  rows.forEach(([name, py, us, unit, med], i) => {
+    const top = f.y1 + i * band, w = (v) => (v / py) * (f.x1 - f.x0)
+    if (narrow) el("text", { x: f.x0, y: top + 14, class: "lab" }, svg, name)
+    else el("text", { x: f.x0 - 14, y: top + band / 2 + 5, "text-anchor": "end", class: "lab" }, svg, name)
+    const y1 = top + (narrow ? 24 : band / 2 - 20), h = 16
+    el("rect", { x: f.x0, y: y1, width: w(py), height: h, fill: "var(--semble)" }, svg)
+    el("text", { x: f.x0 + w(py) + 8, y: y1 + 13 }, svg, `${py} ${unit}`)
+    el("rect", { x: f.x0, y: y1 + h + 6, width: w(us), height: h, fill: "var(--acc)" }, svg)
+    el("text", { x: f.x0 + w(us) + 8, y: y1 + h + 19, class: "strong" }, svg, `${us.toFixed(unit === "s" ? 2 : 0)} ${unit} · ${med}× less`)
+  })
+}
+</script>
+
+<script>
+if (document.getElementById("tron")) { // memory loop: Tron-style wires; a light cycle runs the main loop, a second one the condense branch
+  const NS = "http://www.w3.org/2000/svg", svg = document.getElementById("tron")
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches
+  const mk = (tag, a, parent = svg, text) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (text != null) e.textContent = text; parent.appendChild(e); return e }
+  const steps = {
+    s: ["01", "Session starts", ["The hook lists this project's", "open topics."], "+≈280 tokens, each session"],
+    w: ["02", "Agent works", ["Searches the notes by meaning", "when it needs the past."], "≈138k to answer from notes"],
+    h: ["03", "Stop hook", ["Work done, no note yet?", "It asks for one, once."], "+≈120 tokens, per reminder"],
+    c: ["04", "Note committed", ["Result, evidence, where to", "resume. Git keeps it."], "≈6k read, ≈300 written"],
+    p: ["05", "Before a condense", ["The condense waits until", "the note is saved."], "same flush, nothing lost"],
+  }
+  let cycles = [], boxes = {}, raf
+  function layout() {
+    svg.innerHTML = ""
+    const narrow = svg.clientWidth < 600, W = narrow ? 400 : 1000, bw = narrow ? 300 : 250, bh = 128
+    const P = narrow
+      ? { s: [50, 20], w: [50, 200], h: [50, 380], c: [50, 560], p: [50, 740] }
+      : { s: [30, 30], w: [375, 30], h: [720, 30], c: [720, 250], p: [375, 250] }
+    const H = narrow ? 900 : 430
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`)
+    const defs = mk("defs", {}), f = mk("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%" }, defs)
+    mk("feGaussianBlur", { stdDeviation: 3, result: "b" }, f); const m = mk("feMerge", {}, f); mk("feMergeNode", { in: "b" }, m); mk("feMergeNode", { in: "SourceGraphic" }, m)
+    const L = (k) => P[k][0], T = (k) => P[k][1], R = (k) => P[k][0] + bw, B = (k) => P[k][1] + bh, CX = (k) => P[k][0] + bw / 2, CY = (k) => P[k][1] + bh / 2
+    const main = narrow
+      ? `M${CX("s")},${B("s")} V${T("w")} M${CX("w")},${B("w")} V${T("h")} M${CX("h")},${B("h")} V${T("c")} M${L("c")},${CY("c")} H25 V${CY("s")} H${L("s")}`
+      : `M${R("s")},${CY("s")} H${L("w")} M${R("w")},${CY("w")} H${L("h")} M${CX("h")},${B("h")} V${T("c")} M${CX("c")},${B("c")} V${H - 14} H${CX("s")} V${B("s")}`
+    const branch = narrow
+      ? `M${R("w")},${CY("w")} H${W - 22} V${CY("p")} H${R("p")} M${CX("p")},${T("p")} V${B("c")}`
+      : `M${CX("w")},${B("w")} V${T("p")} M${R("p")},${CY("p")} H${L("c")}`
+    // one continuous route per cycle, jumping through each box's centre so the dot enters and leaves it
+    const route = narrow
+      ? `M${CX("s")},${CY("s")} V${CY("w")} V${CY("h")} V${CY("c")} H25 V${CY("s")} H${CX("s")}`
+      : `M${CX("s")},${CY("s")} H${CX("w")} H${CX("h")} V${CY("c")} V${H - 14} H${CX("s")} V${CY("s")}`
+    const route2 = narrow
+      ? `M${CX("w")},${CY("w")} H${W - 22} V${CY("p")} H${CX("p")} V${CY("c")}`
+      : `M${CX("w")},${CY("w")} V${CY("p")} H${CX("c")}`
+    mk("path", { d: main, class: "wire" }); mk("path", { d: branch, class: "wire", "stroke-dasharray": "6 6" })
+    for (const k in steps) {
+      const [n, t, lines, cost] = steps[k], g = mk("g", { "data-k": k }); boxes[k] = g
+      const x = L(k), y = T(k)
+      mk("rect", { x, y, width: bw, height: bh, class: "box" }, g)
+      for (const [a, b, c, d] of [[x, y + 14, x, y], [x, y, x + 14, y], [x + bw - 14, y + bh, x + bw, y + bh], [x + bw, y + bh, x + bw, y + bh - 14]]) mk("line", { x1: a, y1: b, x2: c, y2: d, class: "tick" }, g)
+      mk("text", { x: x + 16, y: y + 24, class: "n" }, g, n)
+      mk("text", { x: x + 16, y: y + 50, class: "t" }, g, t)
+      lines.forEach((l, i) => mk("text", { x: x + 16, y: y + 74 + i * 18 }, g, l))
+      mk("text", { x: x + 16, y: y + bh - 10, class: "k" }, g, cost)
+    }
+    const mkCycle = (d, speed, len) => {
+      const trail = mk("path", { d, class: "trail" }), total = trail.getTotalLength()
+      trail.style.strokeDasharray = `${len} ${total + len}`
+      const dot = mk("circle", { r: 4.5, class: "cycle" })
+      return { trail, dot, total, speed, len, off: 0 }
+    }
+    // boxes sit on top of the wires; the cycles run between them, under the boxes
+    for (const k in boxes) svg.appendChild(boxes[k])
+    cycles = [mkCycle(route, narrow ? 260 : 300, 160), mkCycle(route2, narrow ? 200 : 180, 90)]
+    cycles[1].off = -cycles[1].total * .4
+    for (const c of cycles) { svg.insertBefore(c.trail, boxes.s); svg.insertBefore(c.dot, boxes.s) }
+    if (still) for (const c of cycles) { c.trail.style.strokeDasharray = "none"; c.dot.remove() }
+  }
+  function hit(p) { for (const k in boxes) { const r = boxes[k].firstChild; const x = +r.getAttribute("x"), y = +r.getAttribute("y"), w = +r.getAttribute("width"), h = +r.getAttribute("height"); boxes[k].classList.toggle("lit", p.x > x && p.x < x + w && p.y > y && p.y < y + h || boxes[k].classList.contains("lit2")) } }
+  let last = performance.now()
+  function tick(now) {
+    const dt = Math.min(.05, (now - last) / 1000); last = now
+    for (const k in boxes) boxes[k].classList.remove("lit")
+    for (const c of cycles) {
+      c.off = (c.off + c.speed * dt) % (c.total + c.len)
+      const head = Math.max(0, Math.min(c.total, c.off))
+      c.trail.style.strokeDashoffset = c.len - c.off
+      const p = c.trail.getPointAtLength(head); c.dot.setAttribute("cx", p.x); c.dot.setAttribute("cy", p.y)
+      c.dot.style.opacity = c.off > c.total ? 0 : 1
+      for (const k in boxes) { const r = boxes[k].firstChild, x = +r.getAttribute("x"), y = +r.getAttribute("y"); if (p.x > x && p.x < x + +r.getAttribute("width") && p.y > y && p.y < y + +r.getAttribute("height")) boxes[k].classList.add("lit") }
+    }
+    raf = requestAnimationFrame(tick)
+  }
+  layout()
+  if (!still) raf = requestAnimationFrame(tick)
+  let wide = svg.clientWidth >= 600
+  addEventListener("resize", () => { if ((svg.clientWidth >= 600) !== wide) { wide = !wide; layout() } })
+}
+if (document.getElementById("recallcost")) { // tokens to answer a question about past work (memory benchmark, 2026-11-15, median per arm)
+  const NS = "http://www.w3.org/2000/svg", svg = document.getElementById("recallcost")
+  const mk = (tag, a, text) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (text != null) e.textContent = text; svg.appendChild(e); return e }
+  const rows = [["Memory notes", 138169, "25 of 30 right", true], ["Code and git history", 215468, "5 of 30 right"], ["Raw transcripts", 340970, "17 of 30 right"], ["Past-chat search", 422740, "7 of 30 right"]]
+  const W = svg.clientWidth < 400 ? 330 : 560, top = 6, rowH = 58, max = 422740
+  svg.setAttribute("viewBox", `0 0 ${W} ${top + rows.length * rowH}`)
+  rows.forEach(([name, v, acc, us], i) => {
+    const y = top + i * rowH, w = (v / max) * (W - 150)
+    mk("text", { x: 0, y: y + 14, class: "lab" }, name)
+    mk("rect", { x: 0, y: y + 22, width: w, height: 16, fill: us ? "var(--acc)" : "var(--faint)" })
+    mk("text", { x: w + 8, y: y + 35, class: us ? "strong" : "" }, `${Math.round(v / 1000)}k · ${acc}`)
+  })
+}
+</script>
+</body>
+</html>
