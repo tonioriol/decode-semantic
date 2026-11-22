@@ -369,7 +369,34 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   // A whole-screen ASCII render (glyph dither) of a perspective floor grid and a soft noise texture.
   // The pointer bends the wave field that modulates all of it, moving it leaves ripples, a click sends a big one.
   const RAMP = " `.-':_,^=;><+!rc*/z?sLTv)J7(|Fi{C}fI31tlu[neoZ5Yxjya]2ESwqkP6h9d4VpOGbUAKXHm8RD#$Bg0MNWQ%&@"
-  const cv = document.getElementById("field"), cx = cv.getContext("2d")
+  // Drawn with WebGL: the CPU only decides one glyph and brightness per cell, the GPU stamps them from an
+  // atlas in one draw call. Canvas 2D text cost ~20 ms a frame in Firefox however it was batched.
+  const cv = document.getElementById("field"), wg = cv.getContext("webgl2", { premultipliedAlpha: true })
+  const mx = document.createElement("canvas").getContext("2d"), LV = 12
+  const atlas = document.createElement("canvas"), ax = atlas.getContext("2d")
+  const prog = (() => {
+    const sh = (type, src) => { const o = wg.createShader(type); wg.shaderSource(o, src); wg.compileShader(o); return o }
+    const p = wg.createProgram()
+    wg.attachShader(p, sh(wg.VERTEX_SHADER, `#version 300 es
+      void main() { vec2 v = vec2(gl_VertexID & 1, gl_VertexID >> 1) * 4. - 1.; gl_Position = vec4(v, 0, 1); }`))
+    wg.attachShader(p, sh(wg.FRAGMENT_SHADER, `#version 300 es
+      precision highp float;
+      uniform sampler2D cells, glyphs; uniform vec2 cell, atl; uniform float h, lv; uniform vec3 rgb;
+      out vec4 o;
+      void main() {
+        vec2 p = vec2(gl_FragCoord.x, h - gl_FragCoord.y), c = floor(p / cell), f = p / cell - c;
+        vec2 d = texelFetch(cells, ivec2(c), 0).rg * 255.;
+        if (d.x < .5) discard;
+        float a = texture(glyphs, vec2((d.x + f.x) * cell.x / atl.x, f.y * cell.y / atl.y)).a * (.14 + d.y / lv * .8);
+        o = vec4(rgb * a, a);
+      }`))
+    wg.linkProgram(p); wg.useProgram(p); return p
+  })()
+  const U = n => wg.getUniformLocation(prog, n)
+  const tex = unit => { const t = wg.createTexture(); wg.activeTexture(wg.TEXTURE0 + unit); wg.bindTexture(wg.TEXTURE_2D, t); wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_WRAP_S, wg.CLAMP_TO_EDGE); wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_WRAP_T, wg.CLAMP_TO_EDGE); return t }
+  const cellTex = tex(0), glyphTex = tex(1)
+  wg.uniform1i(U("cells"), 0); wg.uniform1i(U("glyphs"), 1); wg.uniform1f(U("lv"), LV)
+  wg.pixelStorei(wg.UNPACK_ALIGNMENT, 1)
   const sc = document.createElement("canvas"), sx = sc.getContext("2d", { willReadFrequently: true })
   let W, H, fs, cw, ch, cols, rows
   // noise texture, tiled: two layers scrolled against each other give a slow, living grain
@@ -390,15 +417,25 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   function size() {
     const dpr = Math.min(2, devicePixelRatio || 1)
     W = innerWidth; H = innerHeight
-    cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    cv.width = W * dpr; cv.height = H * dpr
     fs = W < 640 ? 10 : 12
-    cx.font = `${fs}px "JetBrains Mono", ui-monospace, Menlo, monospace`; cx.textBaseline = "top"
-    cw = cx.measureText("M").width; ch = fs
+    font = `${fs}px "JetBrains Mono", ui-monospace, Menlo, monospace`; mx.font = font
+    cw = mx.measureText("M").width; ch = fs
     cols = Math.ceil(W / cw); rows = Math.ceil(H / ch)
     sc.width = cols; sc.height = rows
-    used = new Uint8Array(12 * rows); lines = null
+    cells = new Uint8Array(cols * rows * 2)
+    // the atlas: every glyph once, white, one cell wide, at device resolution
+    atlas.width = Math.ceil(RAMP.length * cw * dpr); atlas.height = Math.ceil(ch * dpr)
+    ax.setTransform(dpr, 0, 0, dpr, 0, 0); ax.font = font; ax.textBaseline = "top"; ax.fillStyle = "#fff"
+    for (let g = 1; g < RAMP.length; g++) ax.fillText(RAMP[g], g * cw, 0)
+    wg.viewport(0, 0, cv.width, cv.height)
+    wg.activeTexture(wg.TEXTURE1); wg.bindTexture(wg.TEXTURE_2D, glyphTex)
+    wg.texImage2D(wg.TEXTURE_2D, 0, wg.RGBA, wg.RGBA, wg.UNSIGNED_BYTE, atlas)
+    wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MIN_FILTER, wg.LINEAR); wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MAG_FILTER, wg.LINEAR)
+    wg.uniform2f(U("cell"), cw * dpr, ch * dpr); wg.uniform2f(U("atl"), atlas.width, atlas.height); wg.uniform1f(U("h"), cv.height)
   }
-  let lines, used
+  let font, cells
+  document.fonts.ready.then(size)
   // pointer, eased like a tilt: -1..1 across the viewport
   const tilt = { x: 0, y: 0, tx: 0, ty: 0 }, ripples = []
   let phase = 0
@@ -441,11 +478,8 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     const j0 = tilt.x * 1.6, k0 = tilt.y * 1.6, A = .3 * t + phase, B = .15 * t + phase * .6, C = .5 * t - phase
     const now = performance.now(), rip = ripples.map(r => ({ x: r.x, y: r.y, a: r.a, life: r.life, age: (now - r.t) / 1000 })).filter(r => r.age < r.life)
     const n1x = (t * 2.2) | 0, n1y = (t * 1.1) | 0, n2x = (-t * 1.4) | 0, n2y = (t * 2.6) | 0
-    // one text line per row and brightness level (other cells left as spaces in the monospace grid):
-    // ~900 fillText calls a frame instead of one per glyph (~10k), which cost most of the frame
-    const L = 12, top = RAMP.length - 1
-    if (!lines || lines.length !== L * rows * cols) lines = new Array(L * rows * cols)
-    lines.fill(" "); used.fill(0)
+    const L = LV, top = RAMP.length - 1
+    cells.fill(0)
     for (let j = 0; j < rows; j++) {
       const v = j / rows
       for (let i = 0; i < cols; i++) {
@@ -463,16 +497,15 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
         const n = noise[((j + n1y) & 127) * NT + ((i + n1x) & 127)] * noise[((j + n2y) & 127) * NT + ((i + n2x) & 127)]
         const b = clamp(s * (.55 + (h + r) * .6) + n * .2 * (.35 + (h + r) * 1.1) + Math.max(0, r) * .12)
         if (b < .045) continue
-        const l = Math.min(L - 1, (b * L) | 0)
-        lines[(l * rows + j) * cols + i] = RAMP[Math.min(top, (b * top) | 0)]; used[l * rows + j] = 1
+        const o = (j * cols + i) * 2
+        cells[o] = Math.min(top, (b * top) | 0); cells[o + 1] = Math.min(L - 1, (b * L) | 0)
       }
     }
-    cx.clearRect(0, 0, W, H)
-    const rgb = accRGB()
-    for (let l = 0; l < L; l++) {
-      cx.fillStyle = `rgba(${rgb},${(.14 + (l / L) * .8).toFixed(3)})`
-      for (let j = 0; j < rows; j++) if (used[l * rows + j]) { const o = (l * rows + j) * cols; cx.fillText(lines.slice(o, o + cols).join(""), 0, j * ch) }
-    }
+    wg.activeTexture(wg.TEXTURE0); wg.bindTexture(wg.TEXTURE_2D, cellTex)
+    wg.texImage2D(wg.TEXTURE_2D, 0, wg.RG8, cols, rows, 0, wg.RG, wg.UNSIGNED_BYTE, cells)
+    wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MIN_FILTER, wg.NEAREST); wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MAG_FILTER, wg.NEAREST)
+    wg.uniform3fv(U("rgb"), accRGB().split(",").map(x => x / 255))
+    wg.clearColor(0, 0, 0, 0); wg.clear(wg.COLOR_BUFFER_BIT); wg.drawArrays(wg.TRIANGLES, 0, 3)
     negatives()
   }
   // the negative inside each button: a solid ink fill with the glyphs under it punched out
@@ -480,14 +513,21 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     const c = document.createElement("canvas"); c.className = "neg"; b.prepend(c); return [b, c, c.getContext("2d")]
   })
   function negatives() {
+    // redraw only the few cells under each button (reading the WebGL canvas back would stall the GPU)
     const dpr = cv.width / W, ink = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim()
     for (const [b, c, g] of negs) {
       const r = b.getBoundingClientRect()
       if (r.bottom < 0 || r.top > H || !r.width) continue
       const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr)
       if (c.width !== w || c.height !== h) { c.width = w; c.height = h }
-      g.globalCompositeOperation = "source-over"; g.fillStyle = ink; g.fillRect(0, 0, w, h)
-      g.globalCompositeOperation = "destination-out"; g.drawImage(cv, r.left * dpr, r.top * dpr, w, h, 0, 0, w, h)
+      g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = "source-over"; g.fillStyle = ink; g.fillRect(0, 0, w, h)
+      g.setTransform(dpr, 0, 0, dpr, -r.left * dpr, -r.top * dpr); g.globalCompositeOperation = "destination-out"; g.font = font; g.textBaseline = "top"
+      const i0 = Math.max(0, Math.floor(r.left / cw)), i1 = Math.min(cols, Math.ceil(r.right / cw)), j0 = Math.max(0, Math.floor(r.top / ch)), j1 = Math.min(rows, Math.ceil(r.bottom / ch))
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
+        const o = (j * cols + i) * 2
+        if (cells[o]) { g.globalAlpha = .14 + cells[o + 1] / LV * .8; g.fillText(RAMP[cells[o]], i * cw, j * ch) }
+      }
+      g.globalAlpha = 1
     }
   }
 
