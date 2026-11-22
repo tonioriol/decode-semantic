@@ -535,9 +535,10 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   // The title sits in the middle of its box and floats. Echoes of it hide behind it and chase it on
   // springs: when it moves, each echo shows only the band between itself and the echo in front, so a
   // striped tail opens on the side it came from and closes again as the echoes catch up.
-  // Five feelings, each 0..1, instead of physics knobs; drawSmears turns them into distances and springs.
-  const DEF = { tail: .5, linger: .4, bounce: .3, idle: .3, jitter: .4, echoes: 9, fade: .35, align: "left", header: .7,
-    glitchRate: 3, glitchMs: 60, burst: 1, flash: .35, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1 }
+  // Plain feelings, mostly 0..1, instead of physics knobs; drawSmears turns them into distances and springs.
+  // Values: the owner's tuning of 2026-11-22.
+  const DEF = { tail: .5, rest: 0, room: .12, linger: .5, bounce: .5, idle: .2, jitter: 1, echoes: 10, fade: .5, align: "left", header: .5,
+    glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1 }
   const tune = new URLSearchParams(location.search).has("tune")
   const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune2") || "{}") : {})
   const smears = [...document.querySelectorAll("[data-smear]")].map(el => {
@@ -577,7 +578,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   }
   // the box is only the title's size: the tail spills over the content around it instead of pushing it away
   function layout(st) {
-    st.room = .12
+    st.room = P.room
     st.el.style.height = (st.capH + 2 * st.room).toFixed(4) + "em"
     st.el.style.textAlign = P.align
   }
@@ -610,7 +611,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
         const d = N - 1 - i
         const wv = Math.sin(t * WS * Math.PI * 2 - d * Math.PI * 2 / WL + s.jp[i] * J * 2) * (1 + J * .6 * nz(t * .9 + i * 3.1))
           + J * .7 * nz(t * 2.3 + i * 7.7)
-        off[i] = (spacing * act * sdir * (1 + s.js[i] * J * .6) + wv * amp) * intro
+        off[i] = (spacing * (P.rest + (1 - P.rest) * act) * sdir * (1 + s.js[i] * J * .6) + wv * amp) * intro
         kk[i] = K * (1 + s.jr[i] * J * .7)
       }
       for (let k = 0; k < steps; k++) {
@@ -710,12 +711,14 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     const C = [
       ["Heading"],
       ["tail", "Tail size", "How far the title and its tail stretch when you scroll", 0, 1, .01, ""],
+      ["rest", "Resting tail", "How much tail stays when you stop: 0 = it disappears, 1 = stays as big as when scrolling", 0, 1, .01, ""],
       ["linger", "Tail linger", "Short and snappy, or slow and lingering after you stop", 0, 1, .01, ""],
       ["bounce", "Bounce", "Overshoot when the tail snaps back", 0, 1, .01, ""],
       ["idle", "Idle motion", "Float and ripple when you're not scrolling; 0 is still", 0, 1, .01, ""],
       ["jitter", "Randomness", "0 is perfectly regular, 1 is restless", 0, 1, .01, ""],
       ["echoes", "Echoes", "How many copies make up the tail", 0, 20, 1, ""],
       ["fade", "Fade", "How much dimmer the far end of the tail is", 0, 1, .01, ""],
+      ["room", "Heading space", "Empty space above and below each heading; the tail spills past it", 0, 1.5, .01, "em"],
       ["Glitches"],
       ["glitchRate", "How often", "Glitches per 10 seconds; 0 turns them off", 0, 20, .1, ""],
       ["glitchMs", "Duration", "How long each one lasts", 16, 400, 2, " ms"],
