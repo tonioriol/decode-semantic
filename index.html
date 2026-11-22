@@ -213,6 +213,14 @@
   .tune small { display: block; color: var(--faint); font-size: 11.5px; }
   .tune .seg { display: flex; margin-top: 4px; } .tune .seg button { margin: 0 4px 0 0; flex: 1; }
   .tune .seg button.on { background: var(--acc); color: var(--on-acc); }
+  .tune label.chk { display: flex; gap: 8px; align-items: center; margin: 6px 0; cursor: pointer; }
+  .tune label.chk input { width: auto; margin: 0; }
+  .gflash { position: fixed; inset: 0; z-index: 150; pointer-events: none; background: #fff; mix-blend-mode: difference; opacity: 0; }
+  .gflash.dark { background: #000; mix-blend-mode: normal; }
+  .ginv { filter: invert(1); }
+  .gch.ginv { filter: none; background: var(--acc); color: var(--on-acc); }
+  .gch.ghide { visibility: hidden; }
+  .gch.gplain { font-family: var(--plain, serif); font-weight: 400; font-stretch: 100%; letter-spacing: 0; text-transform: none; font-style: normal; }
 </style>
 </head>
 <body>
@@ -480,7 +488,8 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   // The title sits in the middle of its box and floats. Echoes of it hide behind it and chase it on
   // springs: when it moves, each echo shows only the band between itself and the echo in front, so a
   // striped tail opens on the side it came from and closes again as the echoes catch up.
-  const DEF = { travel: .5, float: .05, floatSpeed: .3, echoes: 9, spacing: .08, lag: .45, bounce: .3, fade: .35, wave: .025, waveSpeed: 1.2, waveLen: 7, align: "left", header: .7 }
+  const DEF = { travel: .5, float: .05, floatSpeed: .3, echoes: 9, spacing: .08, lag: .45, bounce: .3, fade: .35, wave: .025, waveSpeed: 1.2, waveLen: 7, align: "left", header: .7,
+    glitchRate: 3, glitchMs: 60, burst: 1, flash: .35, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1 }
   const tune = new URLSearchParams(location.search).has("tune")
   const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune") || "{}") : {})
   const smears = [...document.querySelectorAll("[data-smear]")].map(el => {
@@ -561,13 +570,74 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     }
   }
 
-  // ---------- 2b. tuning panel (open the page with ?tune) ----------
+  // ---------- 2b. glitches: rare, very short faults in random places ----------
+  const gl = document.createElement("div"); gl.className = "gflash"; document.body.appendChild(gl)
+  const rnd = (a, b) => a + Math.random() * (b - a), pick = a => a[Math.floor(Math.random() * a.length)]
+  const inView = el => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 60 && r.top < innerHeight }
+  const TEXT = "h1, h2, h3, p, .mini b, .label, .btn, .lockup b, .steps li"
+  // wrap one character (or the word around it) of a visible element in a span; returns undo
+  function wrapChar(word) {
+    const els = [...document.querySelectorAll(TEXT)].filter(e => !e.closest(".tune") && inView(e))
+    if (!els.length) return null
+    const el = pick(els), smear = el.closest(".smear")
+    const targets = smear ? [...smear.querySelectorAll(".strip > span")] : [el]
+    const walk = document.createTreeWalker(targets[0], NodeFilter.SHOW_TEXT), nodes = []
+    while (walk.nextNode()) if (walk.currentNode.data.trim()) nodes.push(walk.currentNode)
+    if (!nodes.length) return null
+    const ni = nodes.indexOf(pick(nodes)), text = nodes[ni].data
+    let i = Math.floor(Math.random() * text.length); while (text[i] === " ") i = (i + 1) % text.length
+    let a = i, b = i + 1
+    if (word) { while (a > 0 && text[a - 1] !== " ") a--; while (b < text.length && text[b] !== " ") b++ }
+    const spans = []
+    for (const t of targets) {
+      const w = document.createTreeWalker(t, NodeFilter.SHOW_TEXT), ns = []
+      while (w.nextNode()) if (w.currentNode.data.trim()) ns.push(w.currentNode)
+      const n = ns[ni]; if (!n || n.data !== text) continue
+      const mid = n.splitText(a); mid.splitText(b - a)
+      const sp = document.createElement("span"); sp.className = "gch"; mid.replaceWith(sp); sp.appendChild(mid); spans.push(sp)
+    }
+    return { spans, undo: () => spans.forEach(sp => { const p = sp.parentNode; if (!p) return; sp.replaceWith(...sp.childNodes); p.normalize() }) }
+  }
+  const KINDS = {
+    gPage: ms => { gl.style.opacity = P.flash; gl.classList.toggle("dark", Math.random() < .5); setTimeout(() => gl.style.opacity = 0, ms) },
+    gBlock: ms => {
+      const els = [...document.querySelectorAll(".glass, .btn, .smear, .chart, .pcard")].filter(e => !e.closest(".tune") && inView(e))
+      if (!els.length) return; const el = pick(els); el.classList.add("ginv"); setTimeout(() => el.classList.remove("ginv"), ms)
+    },
+    gBlink: ms => {
+      const w = wrapChar(false); if (!w) return
+      const cls = Math.random() < .5 ? "ghide" : "ginv"
+      w.spans.forEach(s => s.classList.add(cls))
+      setTimeout(() => w.spans.forEach(s => s.classList.remove(cls)), ms * .4)
+      setTimeout(() => w.spans.forEach(s => s.classList.add(cls)), ms * .7)
+      setTimeout(w.undo, ms * 1.1)
+    },
+    gPlain: ms => { const w = wrapChar(false); if (!w) return; w.spans.forEach(s => s.classList.add("gplain")); setTimeout(w.undo, ms * 1.5) },
+    gWord: ms => { const w = wrapChar(true); if (!w) return; w.spans.forEach(s => s.classList.add("gplain")); setTimeout(w.undo, ms * 1.5) },
+    gShift: ms => {
+      const ss = [...document.querySelectorAll(".smear .strip")].filter(inView); if (!ss.length) return
+      const n = Math.ceil(rnd(1, 4)), dx = rnd(.02, .08) * (Math.random() < .5 ? -1 : 1)
+      for (let k = 0; k < n; k++) { const sp = pick(ss).firstChild; sp.style.translate = `${dx}em`; setTimeout(() => sp.style.translate = "", ms) }
+    },
+  }
+  function glitch() {
+    if (P.glitchRate > 0 && !document.hidden) {
+      const on = Object.keys(KINDS).filter(k => P[k])
+      for (let k = 0; k < P.burst && on.length; k++) KINDS[pick(on)](P.glitchMs * rnd(.5, 1.5))
+    }
+    setTimeout(glitch, P.glitchRate > 0 ? -Math.log(1 - Math.random()) * 10000 / P.glitchRate : 1000)
+  }
+  if (!reduce) setTimeout(glitch, 1500)
+
+  // ---------- 2c. tuning panel (open the page with ?tune) ----------
   function applyAll(rebuild) {
-    document.documentElement.style.setProperty("--hdr", P.header)
+    const r = document.documentElement.style
+    r.setProperty("--hdr", P.header); r.setProperty("--plain", P.plainFont === "serif" ? '"Times New Roman", Times, serif' : P.plainFont)
     smears.forEach(s => rebuild ? build(s) : layout(s))
     if (tune) localStorage.setItem("headingTune", JSON.stringify(P))
   }
   if (tune) {
+    // [key, label, hint, min, max, step, unit] is a slider; [key, label, "check"]; [key, label, hint, [[value, text], …]]
     const C = [
       ["Movement"],
       ["travel", "Scroll travel", "How far the title moves as you scroll", 0, 1.5, .01, "em"],
@@ -583,31 +653,52 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       ["wave", "Wave height", "Ripple through the echoes", 0, .2, .002, "em"],
       ["waveSpeed", "Wave speed", "Ripples per second", 0, 3, .02, "/s"],
       ["waveLen", "Wave length", "Echoes per ripple", 2, 24, .5, ""],
-      ["Page"],
+      ["Glitches"],
+      ["glitchRate", "How often", "Glitches per 10 seconds; 0 turns them off", 0, 20, .1, ""],
+      ["glitchMs", "Duration", "How long each one lasts", 16, 400, 2, " ms"],
+      ["burst", "Burst", "How many fire at once", 1, 5, 1, ""],
+      ["flash", "Flash strength", "How strong the whole-page blink is", 0, 1, .01, ""],
+      ["plainFont", "Plain type", "The unstyled face a letter falls back to", [["serif", "Serif"], ["monospace", "Mono"], ["system-ui", "System"]]],
+      ["gPage", "Whole page blinks", "check"],
+      ["gBlock", "A box inverts", "check"],
+      ["gBlink", "A letter blinks", "check"],
+      ["gPlain", "A letter goes plain", "check"],
+      ["gWord", "A word goes plain", "check"],
+      ["gShift", "Heading slices jump sideways", "check"],
+      ["Layout"],
+      ["align", "Heading alignment", "", [["left", "Left"], ["center", "Center"]]],
       ["header", "Header backdrop", "0 = see-through, 1 = solid", 0, 1, .01, ""],
     ]
     const p = document.createElement("aside"); p.className = "tune glass" + (innerWidth < 600 ? " min" : "")
-    p.innerHTML = `<header><b>Heading</b><span><button data-a="copy">Copy</button><button data-a="reset">Reset</button><button data-a="min">–</button></span></header><div class="tb"></div>`
-    const tb = p.querySelector(".tb")
+    p.innerHTML = `<header><b>Tune</b><span><button data-a="fire">Glitch</button><button data-a="copy">Copy</button><button data-a="reset">Reset</button><button data-a="min">–</button></span></header><div class="tb"></div>`
+    const tb = p.querySelector(".tb"), syncs = []
     const fmt = (v, u) => (Math.abs(v) >= 10 || Number.isInteger(v) ? v : (+v).toFixed(v < 1 ? 3 : 2).replace(/0+$/, "").replace(/\.$/, "")) + u
     for (const c of C) {
       if (c.length === 1) { tb.insertAdjacentHTML("beforeend", `<h4>${c[0]}</h4>`); continue }
-      const [k, label, hint, mn, mx, stp, u] = c
-      const row = document.createElement("label")
-      row.innerHTML = `<span class="tl">${label}<output></output></span><input type="range" min="${mn}" max="${mx}" step="${stp}"><small>${hint}</small>`
-      const inp = row.querySelector("input"), out = row.querySelector("output")
-      const sync = () => { inp.value = P[k]; out.textContent = fmt(+P[k], u) }
-      inp.addEventListener("input", () => { P[k] = +inp.value; out.textContent = fmt(P[k], u); applyAll(k === "echoes") })
-      row.sync = sync; sync(); tb.appendChild(row)
+      const [k, label] = c, row = document.createElement("label")
+      if (c[2] === "check") {
+        row.className = "chk"; row.innerHTML = `<input type="checkbox"><span>${label}</span>`
+        const inp = row.firstChild; syncs.push(() => inp.checked = !!P[k])
+        inp.addEventListener("change", () => { P[k] = inp.checked ? 1 : 0; applyAll() })
+      } else if (Array.isArray(c[3])) {
+        row.innerHTML = `<span class="tl">${label}</span><span class="seg">${c[3].map(([v, t]) => `<button data-v="${v}">${t}</button>`).join("")}</span>${c[2] ? `<small>${c[2]}</small>` : ""}`
+        const bs = [...row.querySelectorAll("button")]; syncs.push(() => bs.forEach(b => b.classList.toggle("on", b.dataset.v === P[k])))
+        bs.forEach(b => b.addEventListener("click", e => { e.preventDefault(); P[k] = b.dataset.v; syncs.forEach(f => f()); applyAll() }))
+      } else {
+        const [, , hint, mn, mx, stp, u] = c
+        row.innerHTML = `<span class="tl">${label}<output></output></span><input type="range" min="${mn}" max="${mx}" step="${stp}"><small>${hint}</small>`
+        const inp = row.querySelector("input"), out = row.querySelector("output")
+        syncs.push(() => { inp.value = P[k]; out.textContent = fmt(+P[k], u) })
+        inp.addEventListener("input", () => { P[k] = +inp.value; out.textContent = fmt(P[k], u); applyAll(k === "echoes") })
+      }
+      tb.appendChild(row)
     }
-    tb.insertAdjacentHTML("beforeend", `<label><span class="tl">Alignment</span><span class="seg"><button data-al="left">Left</button><button data-al="center">Center</button></span></label>`)
-    const segs = [...tb.querySelectorAll("[data-al]")]
-    const segSync = () => segs.forEach(b => b.classList.toggle("on", b.dataset.al === P.align))
-    segs.forEach(b => b.addEventListener("click", e => { e.preventDefault(); P.align = b.dataset.al; segSync(); applyAll() })); segSync()
+    syncs.forEach(f => f())
     p.addEventListener("click", e => {
       const a = e.target.dataset?.a; if (!a) return
-      if (a === "reset") { Object.assign(P, DEF); tb.querySelectorAll("label").forEach(l => l.sync?.()); segSync(); applyAll(true) }
+      if (a === "reset") { Object.assign(P, DEF); syncs.forEach(f => f()); applyAll(true) }
       if (a === "min") p.classList.toggle("min")
+      if (a === "fire") { const on = Object.keys(KINDS).filter(k => P[k]); for (let k = 0; k < P.burst && on.length; k++) KINDS[pick(on)](P.glitchMs * rnd(.5, 1.5)) }
       if (a === "copy") { navigator.clipboard?.writeText(JSON.stringify(P)); e.target.textContent = "Copied"; setTimeout(() => e.target.textContent = "Copy", 1400) }
     })
     document.body.appendChild(p)
