@@ -45,7 +45,7 @@
   .btn .k { font-family: var(--mono); font-size: 13px; opacity: .6; }
   .btn.sm { padding: 11px 16px; font-size: 15px; }
 
-  .top { position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 28px; background: var(--glass); border-bottom: 1px solid var(--line); backdrop-filter: blur(14px) saturate(1.1); -webkit-backdrop-filter: blur(14px) saturate(1.1); }
+  .top { position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 28px; background: rgba(22,22,21,var(--hdr, .7)); border-bottom: 1px solid var(--line); }
   .top nav { display: flex; gap: 8px; }
 
   /* hero */
@@ -83,7 +83,8 @@
   /* stacked headings */
   .smear { font-family: var(--grot); font-weight: 600; font-stretch: 86%; text-transform: uppercase; line-height: .98; letter-spacing: -.01em; color: var(--acc); margin: 0; user-select: none; }
   .smear { position: relative; }
-  .smear .strip { position: absolute; left: 0; top: 0; right: 0; overflow: hidden; will-change: transform, height; }
+  .smear .strip { position: absolute; left: 0; top: 0; right: 0; overflow: hidden; will-change: transform, height, opacity; }
+  .smear .strip.main { overflow: visible; z-index: 1; }
   .smear .strip span { display: block; white-space: nowrap; will-change: transform; }
   .smear .real { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -199,6 +200,19 @@
   .pcard .more { display: block; margin-top: 20px; font: 13px var(--mono); color: var(--dim); }
   .notewrap { max-width: 560px; margin-top: 24px; }
   @media (max-width: 760px) { .pair { grid-template-columns: minmax(0, 1fr); } .pcard { padding: 20px 16px; } }
+  .tune { position: fixed; right: 16px; bottom: 16px; z-index: 200; width: 300px; max-height: calc(100vh - 120px); overflow: auto; font: 13px/1.35 var(--grot); padding: 0; }
+  .tune header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .tune header button, .tune .seg button { font: 12px var(--mono); color: var(--ink); background: none; border: 1px solid var(--line); padding: 4px 8px; margin-left: 4px; cursor: pointer; }
+  .tune .tb { padding: 4px 14px 14px; }
+  .tune.min .tb { display: none; }
+  .tune h4 { margin: 14px 0 4px; font: 11px var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: .08em; }
+  .tune label { display: block; margin: 8px 0; }
+  .tune .tl { display: flex; justify-content: space-between; }
+  .tune output { font: 12px var(--mono); color: var(--dim); }
+  .tune input { width: 100%; margin: 4px 0 0; accent-color: var(--acc); }
+  .tune small { display: block; color: var(--faint); font-size: 11.5px; }
+  .tune .seg { display: flex; margin-top: 4px; } .tune .seg button { margin: 0 4px 0 0; flex: 1; }
+  .tune .seg button.on { background: var(--acc); color: var(--on-acc); }
 </style>
 </head>
 <body>
@@ -212,7 +226,7 @@
   </header>
 
   <div class="hero">
-    <h1 class="smear" data-smear data-strips="9" data-size="clamp(36px, 8.6vw, 128px)">Decode Semantic</h1>
+    <h1 class="smear" data-smear data-size="clamp(36px, 8.6vw, 128px)">Decode Semantic</h1>
     <p class="lead"><b>Search by meaning for coding agents.</b> One local engine, two plugins. No API key; nothing leaves your machine.</p>
     <div class="pair">
       <a class="pcard glass" href="#search">
@@ -462,69 +476,143 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     }
   }
 
-  // ---------- 2. stacked headings ----------
-  // The full title sits at the bottom. Above it, copies of the same title are born from behind it:
-  // each copy shows only its top slice, all slices the same height, so every copy sits the same
-  // distance above the one in front. Scroll lifts the title; each copy chases the one in front on a
-  // stiff spring, so the stack stretches like a wave and snaps back quickly, then just floats.
+  // ---------- 2. headings with a tail ----------
+  // The title sits in the middle of its box and floats. Echoes of it hide behind it and chase it on
+  // springs: when it moves, each echo shows only the band between itself and the echo in front, so a
+  // striped tail opens on the side it came from and closes again as the echoes catch up.
+  const DEF = { travel: .5, float: .05, floatSpeed: .3, echoes: 9, spacing: .08, lag: .45, bounce: .3, fade: .35, wave: .025, waveSpeed: 1.2, waveLen: 7, align: "left", header: .7 }
+  const tune = new URLSearchParams(location.search).has("tune")
+  const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune") || "{}") : {})
   const smears = [...document.querySelectorAll("[data-smear]")].map(el => {
-    const text = el.textContent.trim(), N = +(el.dataset.strips || 11)
+    const st = { el, text: el.textContent.trim(), shown: 0, my: 0, mv: 0 }
     el.style.fontSize = el.dataset.size
-    el.innerHTML = `<span class="real">${text}</span>`
-    const strips = []
-    for (let i = 0; i < N; i++) {
-      const s = document.createElement("span"); s.className = "strip"; s.setAttribute("aria-hidden", "true")
-      const inner = document.createElement("span"); inner.textContent = text
-      s.appendChild(inner); el.appendChild(s); strips.push({ s, inner })
-    }
-    const st = { el, strips, N, step: N > 9 ? .12 : .14, cap: .16, shown: 0, y: new Float32Array(N), v: new Float32Array(N) }
-    capLine(st)
-    return st
+    build(st); return st
   })
-  // distance from the top of the line box to the top of the capitals, in em
-  function capLine(st) {
+  function build(st) {
+    const N = Math.round(P.echoes) + 1
+    st.el.innerHTML = `<span class="real">${st.text}</span>`
+    st.strips = []
+    for (let i = 0; i < N; i++) {
+      const s = document.createElement("span"); s.className = "strip" + (i === N - 1 ? " main" : ""); s.setAttribute("aria-hidden", "true")
+      const inner = document.createElement("span"); inner.textContent = st.text
+      s.appendChild(inner); st.el.appendChild(s); st.strips.push({ s, inner })
+    }
+    st.N = N; st.y = new Float32Array(N); st.v = new Float32Array(N)
+    measure(st)
+  }
+  // cap: line-box top to capital top; capH: capital height; both in em
+  function measure(st) {
     const cs = getComputedStyle(st.el), px = parseFloat(cs.fontSize)
     const g = document.createElement("canvas").getContext("2d")
     g.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
     const m = g.measureText("DECODE")
+    st.cap = .16; st.capH = .72
     if (m.fontBoundingBoxAscent) {
       const lead = (parseFloat(cs.lineHeight) - m.fontBoundingBoxAscent - m.fontBoundingBoxDescent) / 2
       st.cap = (lead + m.fontBoundingBoxAscent - m.actualBoundingBoxAscent) / px
+      st.capH = (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) / px
     }
-    st.el.style.height = (1 - st.cap + (st.N - 1) * st.step).toFixed(4) + "em"
+    layout(st)
   }
-  document.fonts.ready.then(() => smears.forEach(capLine))
+  // room above and below the title: the rest stack plus how far it can travel and float
+  function layout(st) {
+    st.room = (st.N - 1) * P.spacing + P.travel * .6 + P.float + P.wave
+    st.el.style.height = (st.capH + 2 * st.room).toFixed(4) + "em"
+    st.el.style.textAlign = P.align
+  }
+  document.fonts.ready.then(() => smears.forEach(measure))
   function drawSmears(t, dt) {
+    const K = 1400 * Math.pow(1 - P.lag * .97, 2.2), zeta = 1 - P.bounce * .9
     for (const s of smears) {
       const box = s.el.getBoundingClientRect()
       const raw = (innerHeight * .45 - box.top) / innerHeight
       if (s.rest === undefined) s.rest = Math.max(0, raw + scrollY / innerHeight)
-      const target = clamp(raw - s.rest, -.6, 1.2)
-      const steps = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / steps
-      for (let k = 0; k < steps; k++) for (let i = s.N - 1; i >= 0; i--) {
-        const goal = i === s.N - 1 ? target : s.y[i + 1], K = i === s.N - 1 ? 700 : 900
-        s.v[i] += ((goal - s.y[i]) * K - s.v[i] * 2 * Math.sqrt(K) * .8) * h
-        s.y[i] += s.v[i] * h
-      }
+      const lift = clamp(raw - s.rest, -.6, .6)
       s.shown = Math.min(1, s.shown + dt / 1.6)
-      const intro = 1 - (1 - s.shown) ** 3
-      const H = 1 - s.cap + (s.N - 1) * s.step
-      // the main line: a full line box, lifted by the scroll
-      const main = s.strips[s.N - 1], mainTop = H - 1 - s.y[s.N - 1] * .55
-      main.s.style.height = "1em"
-      main.s.style.transform = `translateY(${mainTop.toFixed(4)}em)`
-      let edge = mainTop + s.cap  // top of the capitals of the copy in front
-      for (let i = s.N - 2; i >= 0; i--) {
-        const { s: el, inner } = s.strips[i]
-        const lag = s.y[i] - s.y[i + 1]
-        const hh = clamp(s.step * (1 + lag * 14 + Math.sin(t * 1.4 + i * .9) * .15) * intro, .004, .6)
-        edge -= hh
+      const intro = 1 - (1 - s.shown) ** 3, N = s.N, y = s.y, v = s.v
+      // the title: pulled by the scroll on a stiff spring, plus the idle float
+      const goal = -lift * P.travel + Math.sin(t * P.floatSpeed * Math.PI * 2) * P.float
+      const steps = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / steps
+      for (let k = 0; k < steps; k++) {
+        s.mv += ((goal - s.my) * 900 - s.mv * 2 * Math.sqrt(900) * .9) * h; s.my += s.mv * h
+        y[N - 1] = s.my
+        for (let i = N - 2; i >= 0; i--) {
+          const d = N - 1 - i
+          const g = y[i + 1] - P.spacing * intro + Math.sin(t * P.waveSpeed * Math.PI * 2 - d * Math.PI * 2 / P.waveLen) * P.wave * intro
+          v[i] += ((g - y[i]) * K - v[i] * 2 * Math.sqrt(K) * zeta) * h
+          y[i] += v[i] * h
+        }
+      }
+      // positions are capital tops, relative to the middle of the box
+      const top = s.room, main = s.strips[N - 1]
+      main.s.style.height = "1em"; main.s.style.opacity = 1
+      main.s.style.transform = `translateY(${(top + y[N - 1] - s.cap).toFixed(4)}em)`
+      main.inner.style.transform = ""
+      for (let i = N - 2; i >= 0; i--) {
+        const { s: el, inner } = s.strips[i], gap = y[i] - y[i + 1]
+        const hh = Math.min(Math.abs(gap), s.capH)
+        // above the echo in front: its top band; below it: its bottom band
+        const at = gap < 0 ? y[i] : y[i + 1] + s.capH, into = gap < 0 ? 0 : s.capH - hh
         el.style.height = hh.toFixed(4) + "em"
-        el.style.transform = `translateY(${edge.toFixed(4)}em)`
-        inner.style.transform = `translateY(${(-s.cap).toFixed(4)}em)`
+        el.style.transform = `translateY(${(top + at).toFixed(4)}em)`
+        el.style.opacity = (1 - P.fade * (N - 1 - i) / Math.max(1, N - 1)).toFixed(3)
+        inner.style.transform = `translateY(${(-s.cap - into).toFixed(4)}em)`
       }
     }
   }
+
+  // ---------- 2b. tuning panel (open the page with ?tune) ----------
+  function applyAll(rebuild) {
+    document.documentElement.style.setProperty("--hdr", P.header)
+    smears.forEach(s => rebuild ? build(s) : layout(s))
+    if (tune) localStorage.setItem("headingTune", JSON.stringify(P))
+  }
+  if (tune) {
+    const C = [
+      ["Movement"],
+      ["travel", "Scroll travel", "How far the title moves as you scroll", 0, 1.5, .01, "em"],
+      ["float", "Float height", "Idle drift up and down", 0, .3, .005, "em"],
+      ["floatSpeed", "Float speed", "Idle drifts per second", 0, 1.5, .01, "/s"],
+      ["Tail"],
+      ["echoes", "Echoes", "Copies behind the title", 0, 20, 1, ""],
+      ["spacing", "Rest spacing", "How far each echo peeks out when still", 0, .25, .005, "em"],
+      ["lag", "Tail lag", "How long the echoes take to catch up", 0, 1, .01, ""],
+      ["bounce", "Bounce", "Overshoot when they arrive", 0, 1, .01, ""],
+      ["fade", "Fade", "Far echoes get dimmer", 0, 1, .01, ""],
+      ["Wave"],
+      ["wave", "Wave height", "Ripple through the echoes", 0, .2, .002, "em"],
+      ["waveSpeed", "Wave speed", "Ripples per second", 0, 3, .02, "/s"],
+      ["waveLen", "Wave length", "Echoes per ripple", 2, 24, .5, ""],
+      ["Page"],
+      ["header", "Header backdrop", "0 = see-through, 1 = solid", 0, 1, .01, ""],
+    ]
+    const p = document.createElement("aside"); p.className = "tune glass" + (innerWidth < 600 ? " min" : "")
+    p.innerHTML = `<header><b>Heading</b><span><button data-a="copy">Copy</button><button data-a="reset">Reset</button><button data-a="min">–</button></span></header><div class="tb"></div>`
+    const tb = p.querySelector(".tb")
+    const fmt = (v, u) => (Math.abs(v) >= 10 || Number.isInteger(v) ? v : (+v).toFixed(v < 1 ? 3 : 2).replace(/0+$/, "").replace(/\.$/, "")) + u
+    for (const c of C) {
+      if (c.length === 1) { tb.insertAdjacentHTML("beforeend", `<h4>${c[0]}</h4>`); continue }
+      const [k, label, hint, mn, mx, stp, u] = c
+      const row = document.createElement("label")
+      row.innerHTML = `<span class="tl">${label}<output></output></span><input type="range" min="${mn}" max="${mx}" step="${stp}"><small>${hint}</small>`
+      const inp = row.querySelector("input"), out = row.querySelector("output")
+      const sync = () => { inp.value = P[k]; out.textContent = fmt(+P[k], u) }
+      inp.addEventListener("input", () => { P[k] = +inp.value; out.textContent = fmt(P[k], u); applyAll(k === "echoes") })
+      row.sync = sync; sync(); tb.appendChild(row)
+    }
+    tb.insertAdjacentHTML("beforeend", `<label><span class="tl">Alignment</span><span class="seg"><button data-al="left">Left</button><button data-al="center">Center</button></span></label>`)
+    const segs = [...tb.querySelectorAll("[data-al]")]
+    const segSync = () => segs.forEach(b => b.classList.toggle("on", b.dataset.al === P.align))
+    segs.forEach(b => b.addEventListener("click", e => { e.preventDefault(); P.align = b.dataset.al; segSync(); applyAll() })); segSync()
+    p.addEventListener("click", e => {
+      const a = e.target.dataset?.a; if (!a) return
+      if (a === "reset") { Object.assign(P, DEF); tb.querySelectorAll("label").forEach(l => l.sync?.()); segSync(); applyAll(true) }
+      if (a === "min") p.classList.toggle("min")
+      if (a === "copy") { navigator.clipboard?.writeText(JSON.stringify(P)); e.target.textContent = "Copied"; setTimeout(() => e.target.textContent = "Copy", 1400) }
+    })
+    document.body.appendChild(p)
+  }
+  applyAll()
 
   // ---------- 3. the search panel: real queries and the engine's real top hits ----------
   // Recorded 2026-11-21 by running `decode-semantic search "<query>" --limit 3` in a checkout of
@@ -570,7 +658,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   }
   addEventListener("resize", size)
   size()
-  if (reduce) { smears.forEach(s => s.shown = 1); field(4, 0); drawSmears(0, 0); if (qt) { qt.textContent = Q[0].q; top = Q[0].r[0][3]; qr.innerHTML = Q[0].r.map(row).join(""); [...qr.children].forEach(l => l.classList.add("in")) } }
+  if (reduce) { smears.forEach(s => s.shown = 1); field(4, 0); drawSmears(0, .05); if (qt) { qt.textContent = Q[0].q; top = Q[0].r[0][3]; qr.innerHTML = Q[0].r.map(row).join(""); [...qr.children].forEach(l => l.classList.add("in")) } }
   else { requestAnimationFrame(frame); if (qt) demo() }
   window.__pointer = (x, y) => { tilt.tx = x / innerWidth * 2 - 1; tilt.ty = y / innerHeight * 2 - 1 } // preview hook
 
