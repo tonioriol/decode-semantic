@@ -538,7 +538,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   // striped tail opens on the side it came from and closes again as the echoes catch up.
   // Plain feelings, mostly 0..1, instead of physics knobs; drawSmears turns them into distances and springs.
   // Values: the owner's tuning of 2026-11-22.
-  const DEF = { tail: .5, rest: 0, room: .12, linger: .5, bounce: .5, idle: .2, jitter: 1, echoes: 10, fade: .5, align: "left", header: .5,
+  const DEF = { tail: .75, rest: .5, room: 1, linger: .5, bounce: .5, idle: .2, jitter: 1, echoes: 10, fade: 1, align: "left", header: .5,
     glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1 }
   const tune = new URLSearchParams(location.search).has("tune")
   const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune2") || "{}") : {})
