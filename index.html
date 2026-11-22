@@ -11,7 +11,7 @@
   :root {
     --bg: #161615; --ink: #f2f1ea; --dim: #a3a29a; --faint: #6b6a63; --line: rgba(242,241,234,.14);
     --glass: rgba(22,22,21,.8);
-    --acc: #f2f1ea; --acc-rgb: 242,241,234; --on-acc: #161615;
+    --ink-rgb: 242,241,234; --acc: #f2f1ea; --acc-rgb: 242,241,234; --on-acc: #161615;
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
     --grot: "Archivo", "Helvetica Neue", Arial, sans-serif;
   }
@@ -82,7 +82,7 @@
   .qfoot { display: flex; justify-content: space-between; padding: 10px 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12.5px; }
 
   /* stacked headings */
-  .smear { font-family: var(--grot); font-weight: 600; font-stretch: 86%; text-transform: uppercase; line-height: .98; letter-spacing: -.01em; color: var(--acc); margin: 0; user-select: none; }
+  .smear { font-family: var(--grot); font-weight: 600; font-stretch: 86%; text-transform: uppercase; line-height: .98; letter-spacing: -.01em; color: var(--ink); margin: 0; user-select: none; }
   .smear { position: relative; }
   .smear .strip { position: absolute; left: 0; top: 0; right: 0; overflow: hidden; pointer-events: none; will-change: transform, height, opacity; }
   .smear .strip.main { overflow: visible; z-index: 1; }
@@ -158,8 +158,9 @@
   .tron .box { fill: rgba(10,10,10,.72); stroke: rgba(var(--acc-rgb), .55); stroke-width: 1.5; }
   .tron .tick { stroke: var(--acc); stroke-width: 3; fill: none; }
   .tron .wire { stroke: rgba(var(--acc-rgb), .16); stroke-width: 2; fill: none; }
-  .tron .trail { stroke: var(--acc); stroke-width: 3; fill: none; stroke-linecap: round; filter: url(#glow); }
-  .tron .cycle { fill: #fff; filter: url(#glow); }
+  .tron .trail { stroke: var(--acc); stroke-width: 2.5; fill: none; stroke-linecap: round; }
+  .tron .cycle { fill: #fff; }
+  .tron .flash { fill: var(--acc); pointer-events: none; }
   .tron text { font-family: var(--mono); fill: var(--dim); font-size: 13px; }
   .tron text.n { fill: rgba(var(--acc-rgb), .7); font-size: 12px; }
   .tron text.t { fill: var(--ink); font-family: var(--sans); font-size: 20px; font-weight: 600; }
@@ -364,7 +365,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
 (() => {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches
   const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x))
-  const accRGB = () => getComputedStyle(document.documentElement).getPropertyValue("--acc-rgb").trim()
+  const accRGB = () => getComputedStyle(document.documentElement).getPropertyValue("--ink-rgb").trim() // the background stays black and white
 
   // ---------- 1. background ----------
   // A whole-screen ASCII render (glyph dither) of a perspective floor grid and a soft noise texture.
@@ -515,7 +516,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   })
   function negatives() {
     // redraw only the few cells under each button (reading the WebGL canvas back would stall the GPU)
-    const dpr = cv.width / W, ink = getComputedStyle(document.documentElement).getPropertyValue("--acc").trim()
+    const dpr = cv.width / W, ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim()
     for (const [b, c, g] of negs) {
       const r = b.getBoundingClientRect()
       if (r.bottom < 0 || r.top > H || !r.width) continue
@@ -539,9 +540,13 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   // Plain feelings, mostly 0..1, instead of physics knobs; drawSmears turns them into distances and springs.
   // Values: the owner's tuning of 2026-11-22.
   const DEF = { tail: .75, rest: .5, room: 1, linger: .5, bounce: .5, idle: .2, jitter: 1, echoes: 10, fade: 1, align: "left", header: .5,
-    glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1 }
+    glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1,
+    flowMode: "hops", flowSpeed: .5, flowEase: .7, flowJitter: .5, flowGlow: 0, accent: "mono" }
   const tune = new URLSearchParams(location.search).has("tune")
   const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune2") || "{}") : {})
+  window.pageTune = P // the flow chart script below reads its settings live
+  // the one colour beside black and white; "mono" keeps the page black and white
+  const ACCENT = { mono: "242,241,234", amber: "255,176,32", cyan: "64,214,255", lime: "190,250,70", coral: "255,104,84" }
   const smears = [...document.querySelectorAll("[data-smear]")].map(el => {
     const st = { el, text: el.textContent.trim(), shown: 0, my: 0, mv: 0 }
     el.style.fontSize = el.dataset.size
@@ -704,6 +709,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   function applyAll(rebuild) {
     const r = document.documentElement.style
     r.setProperty("--hdr", P.header); r.setProperty("--plain", P.plainFont === "serif" ? '"Times New Roman", Times, serif' : P.plainFont)
+    const acc = ACCENT[P.accent] || ACCENT.mono; r.setProperty("--acc-rgb", acc); r.setProperty("--acc", `rgb(${acc})`)
     smears.forEach(s => rebuild ? build(s) : layout(s))
     if (tune) localStorage.setItem("headingTune2", JSON.stringify(P))
   }
@@ -732,7 +738,14 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       ["gPlain", "A letter goes plain", "check"],
       ["gWord", "A word goes plain", "check"],
       ["gShift", "Heading slices jump sideways", "check"],
+      ["Flow chart"],
+      ["flowMode", "Motion", "Signals hop from box to box, or one runs the whole loop", [["hops", "Box to box"], ["loop", "Whole loop"]]],
+      ["flowSpeed", "Speed", "How fast signals travel", 0, 1, .01, ""],
+      ["flowEase", "Easing", "0 = constant speed, 1 = slow start and slow arrival", 0, 1, .01, ""],
+      ["flowJitter", "Randomness", "Varies each signal's speed, pauses and route", 0, 1, .01, ""],
+      ["flowGlow", "Glow", "Blur around the signal; 0 is sharp", 0, 1, .01, ""],
       ["Layout"],
+      ["accent", "Accent colour", "One colour beside black and white", [["mono", "None"], ["amber", "Amber"], ["cyan", "Cyan"], ["lime", "Lime"], ["coral", "Coral"]]],
       ["align", "Heading alignment", "", [["left", "Left"], ["center", "Center"]]],
       ["header", "Header backdrop", "0 = see-through, 1 = solid", 0, 1, .01, ""],
     ]
@@ -912,10 +925,12 @@ if (document.getElementById("res")) { // memory and CPU: Python Semble vs Decode
 </script>
 
 <script>
-if (document.getElementById("tron")) { // memory loop: Tron-style wires; a light cycle runs the main loop, a second one the condense branch
+if (document.getElementById("tron")) { // memory loop: boxes joined by wires; signals hop box to box like nerve impulses, or one runs the whole loop (?tune "Flow chart")
   const NS = "http://www.w3.org/2000/svg", svg = document.getElementById("tron")
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches
+  const pt = window.pageTune
   const mk = (tag, a, parent = svg, text) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (text != null) e.textContent = text; parent.appendChild(e); return e }
+  const rnd = (a, b) => a + Math.random() * (b - a)
   const steps = {
     s: ["01", "Session starts", ["Open topics and the notes", "that match the prompt."], "+≈400 tokens, each session"],
     w: ["02", "Agent works", ["Searches the notes by meaning", "when it needs the past."], "≈138k to answer from notes"],
@@ -923,9 +938,9 @@ if (document.getElementById("tron")) { // memory loop: Tron-style wires; a light
     c: ["04", "Note committed", ["Result, evidence, where to", "resume. Git keeps it."], "≈6k read, ≈300 written"],
     p: ["05", "Before a condense", ["The condense waits until", "the note is saved."], "same flush, nothing lost"],
   }
-  let cycles = [], boxes = {}, raf
+  let boxes = {}, edges = {}, cycles = [], sigs = [], timers = [], fire = {}, mode, glow = -1, blur
   function layout() {
-    svg.innerHTML = ""
+    svg.innerHTML = ""; boxes = {}; edges = {}; cycles = []; sigs = []; timers = []; mode = pt.flowMode; glow = -1
     const narrow = svg.clientWidth < 600, W = narrow ? 400 : 1000, bw = narrow ? 300 : 250, bh = 128
     const P = narrow
       ? { s: [50, 20], w: [50, 200], h: [50, 380], c: [50, 560], p: [50, 740] }
@@ -933,62 +948,104 @@ if (document.getElementById("tron")) { // memory loop: Tron-style wires; a light
     const H = narrow ? 900 : 430
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`)
     const defs = mk("defs", {}), f = mk("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%" }, defs)
-    mk("feGaussianBlur", { stdDeviation: 3, result: "b" }, f); const m = mk("feMerge", {}, f); mk("feMergeNode", { in: "b" }, m); mk("feMergeNode", { in: "SourceGraphic" }, m)
+    blur = mk("feGaussianBlur", { stdDeviation: 0, result: "b" }, f); const m = mk("feMerge", {}, f); mk("feMergeNode", { in: "b" }, m); mk("feMergeNode", { in: "SourceGraphic" }, m)
     const L = (k) => P[k][0], T = (k) => P[k][1], R = (k) => P[k][0] + bw, B = (k) => P[k][1] + bh, CX = (k) => P[k][0] + bw / 2, CY = (k) => P[k][1] + bh / 2
-    const main = narrow
-      ? `M${CX("s")},${B("s")} V${T("w")} M${CX("w")},${B("w")} V${T("h")} M${CX("h")},${B("h")} V${T("c")} M${L("c")},${CY("c")} H25 V${CY("s")} H${L("s")}`
-      : `M${R("s")},${CY("s")} H${L("w")} M${R("w")},${CY("w")} H${L("h")} M${CX("h")},${B("h")} V${T("c")} M${CX("c")},${B("c")} V${H - 14} H${CX("s")} V${B("s")}`
-    const branch = narrow
-      ? `M${R("w")},${CY("w")} H${W - 22} V${CY("p")} H${R("p")} M${CX("p")},${T("p")} V${B("c")}`
-      : `M${CX("w")},${B("w")} V${T("p")} M${R("p")},${CY("p")} H${L("c")}`
-    // one continuous route per cycle, jumping through each box's centre so the dot enters and leaves it
-    const route = narrow
-      ? `M${CX("s")},${CY("s")} V${CY("w")} V${CY("h")} V${CY("c")} H25 V${CY("s")} H${CX("s")}`
-      : `M${CX("s")},${CY("s")} H${CX("w")} H${CX("h")} V${CY("c")} V${H - 14} H${CX("s")} V${CY("s")}`
-    const route2 = narrow
-      ? `M${CX("w")},${CY("w")} H${W - 22} V${CY("p")} H${CX("p")} V${CY("c")}`
-      : `M${CX("w")},${CY("w")} V${CY("p")} H${CX("c")}`
-    mk("path", { d: main, class: "wire" }); mk("path", { d: branch, class: "wire", "stroke-dasharray": "6 6" })
+    // one wire per hop, from the edge of one box to the edge of the next
+    const E = narrow ? {
+      "s>w": `M${CX("s")},${B("s")} V${T("w")}`, "w>h": `M${CX("w")},${B("w")} V${T("h")}`, "h>c": `M${CX("h")},${B("h")} V${T("c")}`,
+      "c>s": `M${L("c")},${CY("c")} H25 V${CY("s")} H${L("s")}`,
+      "w>p": `M${R("w")},${CY("w")} H${W - 22} V${CY("p")} H${R("p")}`, "p>c": `M${CX("p")},${T("p")} V${B("c")}`,
+    } : {
+      "s>w": `M${R("s")},${CY("s")} H${L("w")}`, "w>h": `M${R("w")},${CY("w")} H${L("h")}`, "h>c": `M${CX("h")},${B("h")} V${T("c")}`,
+      "c>s": `M${CX("c")},${B("c")} V${H - 14} H${CX("s")} V${B("s")}`,
+      "w>p": `M${CX("w")},${B("w")} V${T("p")}`, "p>c": `M${R("p")},${CY("p")} H${L("c")}`,
+    }
+    for (const k in E) mk("path", { d: E[k], class: "wire", ...(k === "w>p" || k === "p>c" ? { "stroke-dasharray": "6 6" } : {}) })
     for (const k in steps) {
-      const [n, t, lines, cost] = steps[k], g = mk("g", { "data-k": k }); boxes[k] = g
+      const [n, t, lines, cost] = steps[k], g = mk("g", { "data-k": k }); boxes[k] = g; fire[k] = 0
       const x = L(k), y = T(k)
       mk("rect", { x, y, width: bw, height: bh, class: "box" }, g)
+      g.flash = mk("rect", { x, y, width: bw, height: bh, class: "flash", opacity: 0 }, g)
       for (const [a, b, c, d] of [[x, y + 14, x, y], [x, y, x + 14, y], [x + bw - 14, y + bh, x + bw, y + bh], [x + bw, y + bh, x + bw, y + bh - 14]]) mk("line", { x1: a, y1: b, x2: c, y2: d, class: "tick" }, g)
       mk("text", { x: x + 16, y: y + 24, class: "n" }, g, n)
       mk("text", { x: x + 16, y: y + 50, class: "t" }, g, t)
       lines.forEach((l, i) => mk("text", { x: x + 16, y: y + 74 + i * 18 }, g, l))
       mk("text", { x: x + 16, y: y + bh - 10, class: "k" }, g, cost)
     }
-    const mkCycle = (d, speed, len) => {
-      const trail = mk("path", { d, class: "trail" }), total = trail.getTotalLength()
-      trail.style.strokeDasharray = `${len} ${total + len}`
-      const dot = mk("circle", { r: 4.5, class: "cycle" })
-      return { trail, dot, total, speed, len, off: 0 }
+    const mkTrail = (d) => {
+      const trail = mk("path", { d, class: "trail" }), total = trail.getTotalLength(), dot = mk("circle", { r: 4, class: "cycle" })
+      trail.style.strokeDasharray = `0 ${total + 999}`; dot.style.opacity = 0
+      return { trail, dot, total }
     }
-    // boxes sit on top of the wires; the cycles run between them, under the boxes
+    if (mode === "hops") for (const k in E) edges[k] = mkTrail(E[k])
+    else {
+      // the whole loop: one continuous route per cycle, jumping through each box's centre
+      const route = narrow
+        ? `M${CX("s")},${CY("s")} V${CY("w")} V${CY("h")} V${CY("c")} H25 V${CY("s")} H${CX("s")}`
+        : `M${CX("s")},${CY("s")} H${CX("w")} H${CX("h")} V${CY("c")} V${H - 14} H${CX("s")} V${CY("s")}`
+      const route2 = narrow
+        ? `M${CX("w")},${CY("w")} H${W - 22} V${CY("p")} H${CX("p")} V${CY("c")}`
+        : `M${CX("w")},${CY("w")} V${CY("p")} H${CX("c")}`
+      cycles = [Object.assign(mkTrail(route), { speed: 1, len: 160, off: 0 }), Object.assign(mkTrail(route2), { speed: .65, len: 90, off: 0 })]
+      cycles[1].off = -cycles[1].total * .4
+    }
+    // boxes sit on top of the wires and signals
     for (const k in boxes) svg.appendChild(boxes[k])
-    cycles = [mkCycle(route, narrow ? 260 : 300, 160), mkCycle(route2, narrow ? 200 : 180, 90)]
-    cycles[1].off = -cycles[1].total * .4
-    for (const c of cycles) { svg.insertBefore(c.trail, boxes.s); svg.insertBefore(c.dot, boxes.s) }
-    if (still) for (const c of cycles) { c.trail.style.strokeDasharray = "none"; c.dot.remove() }
   }
-  function hit(p) { for (const k in boxes) { const r = boxes[k].firstChild; const x = +r.getAttribute("x"), y = +r.getAttribute("y"), w = +r.getAttribute("width"), h = +r.getAttribute("height"); boxes[k].classList.toggle("lit", p.x > x && p.x < x + w && p.y > y && p.y < y + h || boxes[k].classList.contains("lit2")) } }
+  // easing: 0 = constant speed, 1 = ease in and out; jitter bends each hop's curve a little differently
+  const io = u => u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2
+  const NEXT = { s: ["w"], h: ["c"], c: ["s"], p: ["c"] }
+  function launch(node, t) {
+    let to = NEXT[node]
+    if (node === "w") { const r = Math.random(); to = r < .22 ? ["p"] : r < .36 ? ["h", "p"] : ["h"] }
+    const sp = 140 + 560 * pt.flowSpeed, J = pt.flowJitter
+    for (const n of to) {
+      const k = `${node}>${n}`, e = edges[k]; if (sigs.some(s => s.k === k)) continue
+      const len = Math.min(e.total * .5, 26 + 60 * pt.flowSpeed)
+      sigs.push({ k, to: n, e, len, t0: t, dur: (e.total + len) / sp * (1 + J * rnd(-.45, .6)), ph: rnd(0, 6.3), wob: J * rnd(.02, .06), hit: false })
+    }
+  }
   let last = performance.now()
   function tick(now) {
-    const dt = Math.min(.05, (now - last) / 1000); last = now
-    for (const k in boxes) boxes[k].classList.remove("lit")
-    for (const c of cycles) {
-      c.off = (c.off + c.speed * dt) % (c.total + c.len)
-      const head = Math.max(0, Math.min(c.total, c.off))
-      c.trail.style.strokeDashoffset = c.len - c.off
-      const p = c.trail.getPointAtLength(head); c.dot.setAttribute("cx", p.x); c.dot.setAttribute("cy", p.y)
-      c.dot.style.opacity = c.off > c.total ? 0 : 1
-      for (const k in boxes) { const r = boxes[k].firstChild, x = +r.getAttribute("x"), y = +r.getAttribute("y"); if (p.x > x && p.x < x + +r.getAttribute("width") && p.y > y && p.y < y + +r.getAttribute("height")) boxes[k].classList.add("lit") }
+    const dt = Math.min(.05, (now - last) / 1000), t = now / 1000; last = now
+    if (pt.flowMode !== mode) layout()
+    if (pt.flowGlow !== glow) { glow = pt.flowGlow; blur.setAttribute("stdDeviation", 4 * glow); for (const el of svg.querySelectorAll(".trail, .cycle")) el.style.filter = glow > 0 ? "url(#glow)" : "" }
+    for (const k in boxes) { fire[k] = Math.max(0, fire[k] - dt / .5); boxes[k].flash.setAttribute("opacity", (.16 * fire[k] * fire[k]).toFixed(3)); boxes[k].classList.toggle("lit", fire[k] > .25) }
+    if (mode === "hops") {
+      if (!sigs.length && !timers.length) timers.push({ at: t + .3, node: "s" })
+      timers = timers.filter(tm => tm.at > t || (launch(tm.node, t), false))
+      sigs = sigs.filter(s => {
+        const u = Math.min(1, (t - s.t0) / s.dur)
+        const eu = u + (io(u) - u) * pt.flowEase + Math.sin(u * Math.PI) * Math.sin(u * 9 + s.ph) * s.wob
+        const head = eu * (s.e.total + s.len)
+        s.e.trail.style.strokeDasharray = `${s.len} ${s.e.total + s.len}`; s.e.trail.style.strokeDashoffset = s.len - head
+        const p = s.e.trail.getPointAtLength(Math.max(0, Math.min(s.e.total, head)))
+        s.e.dot.setAttribute("cx", p.x); s.e.dot.setAttribute("cy", p.y); s.e.dot.style.opacity = head < s.e.total ? 1 : 0
+        if (!s.hit && head >= s.e.total) {
+          s.hit = true
+          // a box that just fired ignores a second signal (two chains merging become one)
+          if (fire[s.to] < .5) { const J = pt.flowJitter; timers.push({ at: t + (.08 + .4 * (1 - pt.flowSpeed)) * (1 + J * rnd(-.6, 1)), node: s.to }) }
+          fire[s.to] = 1
+        }
+        if (u < 1) return true
+        s.e.trail.style.strokeDasharray = `0 ${s.e.total + 999}`; return false
+      })
+    } else {
+      const sp = .4 + 1.6 * pt.flowSpeed
+      for (const c of cycles) {
+        c.off = (c.off + 300 * c.speed * sp * dt) % (c.total + c.len)
+        const head = Math.max(0, Math.min(c.total, c.off))
+        c.trail.style.strokeDasharray = `${c.len} ${c.total + c.len}`; c.trail.style.strokeDashoffset = c.len - c.off
+        const p = c.trail.getPointAtLength(head); c.dot.setAttribute("cx", p.x); c.dot.setAttribute("cy", p.y)
+        c.dot.style.opacity = c.off > c.total || c.off < 0 ? 0 : 1
+        for (const k in boxes) { const r = boxes[k].firstChild, x = +r.getAttribute("x"), y = +r.getAttribute("y"); if (p.x > x && p.x < x + +r.getAttribute("width") && p.y > y && p.y < y + +r.getAttribute("height")) fire[k] = Math.max(fire[k], .6) }
+      }
     }
-    raf = requestAnimationFrame(tick)
+    requestAnimationFrame(tick)
   }
   layout()
-  if (!still) raf = requestAnimationFrame(tick)
+  if (still) { for (const k in edges) edges[k].trail.style.strokeDasharray = "none"; for (const c of cycles) c.trail.style.strokeDasharray = "none" }
+  else requestAnimationFrame(tick)
   let wide = svg.clientWidth >= 600
   addEventListener("resize", () => { if ((svg.clientWidth >= 600) !== wide) { wide = !wide; layout() } })
 }
