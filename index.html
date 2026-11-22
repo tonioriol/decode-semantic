@@ -535,7 +535,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   // The title sits in the middle of its box and floats. Echoes of it hide behind it and chase it on
   // springs: when it moves, each echo shows only the band between itself and the echo in front, so a
   // striped tail opens on the side it came from and closes again as the echoes catch up.
-  const DEF = { travel: .5, float: .05, floatSpeed: .3, echoes: 9, spacing: .08, lag: .45, bounce: .3, fade: .35, wave: .025, waveSpeed: 1.2, waveLen: 7, align: "left", header: .7,
+  const DEF = { travel: .5, drag: .12, float: .05, floatSpeed: .3, echoes: 9, spacing: .08, lag: .45, bounce: .3, fade: .35, hold: .6, wave: .025, idleWave: .012, waveSpeed: 1.2, waveLen: 7, jitter: .4, align: "left", header: .7,
     glitchRate: 3, glitchMs: 60, burst: 1, flash: .35, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1 }
   const tune = new URLSearchParams(location.search).has("tune")
   const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune") || "{}") : {})
@@ -554,6 +554,10 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       s.appendChild(inner); st.el.appendChild(s); st.strips.push({ s, inner })
     }
     st.N = N; st.y = new Float32Array(N); st.v = new Float32Array(N)
+    // fixed per-echo randomness, scaled live by the jitter setting: stiffness, spacing, wave phase
+    st.jr = new Float32Array(N).map(() => Math.random() * 2 - 1)
+    st.js = new Float32Array(N).map(() => Math.random() * 2 - 1)
+    st.jp = new Float32Array(N).map(() => Math.random() * 2 - 1)
     measure(st)
   }
   // cap: line-box top to capital top; capH: capital height; both in em
@@ -572,13 +576,25 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   }
   // room above and below the title: the rest stack plus how far it can travel and float
   function layout(st) {
-    st.room = (st.N - 1) * P.spacing + P.travel * .6 + P.float + P.wave
+    st.room = (st.N - 1) * P.spacing + P.travel * .6 + P.drag * 2 + P.float + Math.max(P.wave, P.idleWave) * 1.6
     st.el.style.height = (st.capH + 2 * st.room).toFixed(4) + "em"
     st.el.style.textAlign = P.align
   }
   document.fonts.ready.then(() => smears.forEach(measure))
+  // smooth 1D value noise in -1..1, for the irregular parts of the motion
+  const hash = n => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s) }
+  const nz = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return (hash(i) + (hash(i + 1) - hash(i)) * u) * 2 - 1 }
+  // scroll activity 0..1: jumps up while the page scrolls, fades over `hold` seconds after it stops;
+  // the tail opens only with it. sdir is the side the tail opens on (behind the motion).
+  let lastScroll = scrollY, sv = 0, act = 0, sdir = 1
   function drawSmears(t, dt) {
-    const K = 1400 * Math.pow(1 - P.lag * .97, 2.2), zeta = 1 - P.bounce * .9
+    const K = 1400 * Math.pow(1 - P.lag * .97, 2.2), zeta = 1 - P.bounce * .9, J = P.jitter
+    const raw = dt > 0 ? (scrollY - lastScroll) / dt / innerHeight : 0; lastScroll = scrollY
+    sv += (clamp(raw, -4, 4) - sv) * clamp(dt * 10)
+    if (Math.abs(sv) > .02) sdir = Math.sign(sv)
+    const want = clamp(Math.abs(sv) * 3)
+    act = want > act ? act + (want - act) * clamp(dt * 14) : act * Math.exp(-dt / Math.max(.05, P.hold))
+    const amp = P.wave * act + P.idleWave
     for (const s of smears) {
       const box = s.el.getBoundingClientRect()
       const raw = (innerHeight * .45 - box.top) / innerHeight
@@ -587,15 +603,23 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       s.shown = Math.min(1, s.shown + dt / 1.6)
       const intro = 1 - (1 - s.shown) ** 3, N = s.N, y = s.y, v = s.v
       // the title: pulled by the scroll on a stiff spring, plus the idle float
-      const goal = -lift * P.travel + Math.sin(t * P.floatSpeed * Math.PI * 2) * P.float
+      // scroll position moves it, scroll speed drags it behind the page; idle float on top
+      const goal = -lift * P.travel + sv * P.drag + (Math.sin(t * P.floatSpeed * Math.PI * 2) * (1 - J * .5) + nz(t * P.floatSpeed * 1.7 + 11) * J * .8) * P.float
       const steps = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / steps
+      // the wave and the echo offsets change slowly, so work them out once per frame
+      const off = new Float32Array(N), kk = new Float32Array(N)
+      for (let i = N - 2; i >= 0; i--) {
+        const d = N - 1 - i
+        const wv = Math.sin(t * P.waveSpeed * Math.PI * 2 - d * Math.PI * 2 / P.waveLen + s.jp[i] * J * 2) * (1 + J * .6 * nz(t * .9 + i * 3.1))
+          + J * .7 * nz(t * 2.3 + i * 7.7)
+        off[i] = (P.spacing * act * sdir * (1 + s.js[i] * J * .6) + wv * amp) * intro
+        kk[i] = K * (1 + s.jr[i] * J * .7)
+      }
       for (let k = 0; k < steps; k++) {
         s.mv += ((goal - s.my) * 900 - s.mv * 2 * Math.sqrt(900) * .9) * h; s.my += s.mv * h
         y[N - 1] = s.my
         for (let i = N - 2; i >= 0; i--) {
-          const d = N - 1 - i
-          const g = y[i + 1] - P.spacing * intro + Math.sin(t * P.waveSpeed * Math.PI * 2 - d * Math.PI * 2 / P.waveLen) * P.wave * intro
-          v[i] += ((g - y[i]) * K - v[i] * 2 * Math.sqrt(K) * zeta) * h
+          v[i] += ((y[i + 1] + off[i] - y[i]) * kk[i] - v[i] * 2 * Math.sqrt(kk[i]) * zeta) * h
           y[i] += v[i] * h
         }
       }
@@ -688,18 +712,22 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     const C = [
       ["Movement"],
       ["travel", "Scroll travel", "How far the title moves as you scroll", 0, 1.5, .01, "em"],
+      ["drag", "Scroll drag", "How far the title lags behind when you scroll fast", 0, .5, .005, "em"],
       ["float", "Float height", "Idle drift up and down", 0, .3, .005, "em"],
       ["floatSpeed", "Float speed", "Idle drifts per second", 0, 1.5, .01, "/s"],
       ["Tail"],
       ["echoes", "Echoes", "Copies behind the title", 0, 20, 1, ""],
-      ["spacing", "Rest spacing", "How far each echo peeks out when still", 0, .25, .005, "em"],
+      ["spacing", "Spacing", "How far each echo opens out while you scroll", 0, .25, .005, "em"],
+      ["hold", "Tail hold", "How long the tail stays after you stop scrolling", .05, 3, .05, " s"],
       ["lag", "Tail lag", "How long the echoes take to catch up", 0, 1, .01, ""],
       ["bounce", "Bounce", "Overshoot when they arrive", 0, 1, .01, ""],
       ["fade", "Fade", "Far echoes get dimmer", 0, 1, .01, ""],
       ["Wave"],
-      ["wave", "Wave height", "Ripple through the echoes", 0, .2, .002, "em"],
+      ["wave", "Scroll wave", "Ripple through the echoes while you scroll", 0, .2, .002, "em"],
+      ["idleWave", "Idle wave", "Ripple when still; 0 hides the tail completely", 0, .1, .001, "em"],
       ["waveSpeed", "Wave speed", "Ripples per second", 0, 3, .02, "/s"],
       ["waveLen", "Wave length", "Echoes per ripple", 2, 24, .5, ""],
+      ["jitter", "Jitter", "Randomness in timing and shape; 0 is perfectly regular", 0, 1, .01, ""],
       ["Glitches"],
       ["glitchRate", "How often", "Glitches per 10 seconds; 0 turns them off", 0, 20, .1, ""],
       ["glitchMs", "Duration", "How long each one lasts", 16, 400, 2, " ms"],
