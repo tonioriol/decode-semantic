@@ -215,7 +215,8 @@
   .tune .seg button.on { background: var(--acc); color: var(--on-acc); }
   .tune label.chk { display: flex; gap: 8px; align-items: center; margin: 6px 0; cursor: pointer; }
   .tune label.chk input { width: auto; margin: 0; }
-  .gflash { position: fixed; inset: 0; z-index: 150; pointer-events: none; background: #fff; mix-blend-mode: difference; opacity: 0; }
+  .gflash { position: fixed; inset: 0; z-index: 150; pointer-events: none; background: #fff; mix-blend-mode: difference; }
+  .gflash[hidden] { display: none; }
   .gflash.dark { background: #000; mix-blend-mode: normal; }
   .ginv { filter: invert(1); }
   .gch.ginv { filter: none; background: var(--acc); color: var(--on-acc); }
@@ -395,7 +396,9 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     cw = cx.measureText("M").width; ch = fs
     cols = Math.ceil(W / cw); rows = Math.ceil(H / ch)
     sc.width = cols; sc.height = rows
+    used = new Uint8Array(12 * rows); lines = null
   }
+  let lines, used
   // pointer, eased like a tilt: -1..1 across the viewport
   const tilt = { x: 0, y: 0, tx: 0, ty: 0 }, ripples = []
   let phase = 0
@@ -438,7 +441,11 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     const j0 = tilt.x * 1.6, k0 = tilt.y * 1.6, A = .3 * t + phase, B = .15 * t + phase * .6, C = .5 * t - phase
     const now = performance.now(), rip = ripples.map(r => ({ x: r.x, y: r.y, a: r.a, life: r.life, age: (now - r.t) / 1000 })).filter(r => r.age < r.life)
     const n1x = (t * 2.2) | 0, n1y = (t * 1.1) | 0, n2x = (-t * 1.4) | 0, n2y = (t * 2.6) | 0
-    const L = 12, bins = Array.from({ length: L }, () => []), top = RAMP.length - 1
+    // one text line per row and brightness level (other cells left as spaces in the monospace grid):
+    // ~900 fillText calls a frame instead of one per glyph (~10k), which cost most of the frame
+    const L = 12, top = RAMP.length - 1
+    if (!lines || lines.length !== L * rows * cols) lines = new Array(L * rows * cols)
+    lines.fill(" "); used.fill(0)
     for (let j = 0; j < rows; j++) {
       const v = j / rows
       for (let i = 0; i < cols; i++) {
@@ -456,16 +463,16 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
         const n = noise[((j + n1y) & 127) * NT + ((i + n1x) & 127)] * noise[((j + n2y) & 127) * NT + ((i + n2x) & 127)]
         const b = clamp(s * (.55 + (h + r) * .6) + n * .2 * (.35 + (h + r) * 1.1) + Math.max(0, r) * .12)
         if (b < .045) continue
-        bins[Math.min(L - 1, (b * L) | 0)].push(RAMP[Math.min(top, (b * top) | 0)], i * cw, j * ch)
+        const l = Math.min(L - 1, (b * L) | 0)
+        lines[(l * rows + j) * cols + i] = RAMP[Math.min(top, (b * top) | 0)]; used[l * rows + j] = 1
       }
     }
     cx.clearRect(0, 0, W, H)
     const rgb = accRGB()
-    bins.forEach((bin, l) => {
-      if (!bin.length) return
+    for (let l = 0; l < L; l++) {
       cx.fillStyle = `rgba(${rgb},${(.14 + (l / L) * .8).toFixed(3)})`
-      for (let n = 0; n < bin.length; n += 3) cx.fillText(bin[n], bin[n + 1], bin[n + 2])
-    })
+      for (let j = 0; j < rows; j++) if (used[l * rows + j]) { const o = (l * rows + j) * cols; cx.fillText(lines.slice(o, o + cols).join(""), 0, j * ch) }
+    }
     negatives()
   }
   // the negative inside each button: a solid ink fill with the glyphs under it punched out
@@ -571,7 +578,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   }
 
   // ---------- 2b. glitches: rare, very short faults in random places ----------
-  const gl = document.createElement("div"); gl.className = "gflash"; document.body.appendChild(gl)
+  const gl = document.createElement("div"); gl.className = "gflash"; gl.hidden = true; document.body.appendChild(gl)
   const rnd = (a, b) => a + Math.random() * (b - a), pick = a => a[Math.floor(Math.random() * a.length)]
   const inView = el => { const r = el.getBoundingClientRect(); return r.width && r.bottom > 60 && r.top < innerHeight }
   const TEXT = "h1, h2, h3, p, .mini b, .label, .btn, .lockup b, .steps li"
@@ -599,7 +606,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     return { spans, undo: () => spans.forEach(sp => { const p = sp.parentNode; if (!p) return; sp.replaceWith(...sp.childNodes); p.normalize() }) }
   }
   const KINDS = {
-    gPage: ms => { gl.style.opacity = P.flash; gl.classList.toggle("dark", Math.random() < .5); setTimeout(() => gl.style.opacity = 0, ms) },
+    gPage: ms => { gl.style.opacity = P.flash; gl.classList.toggle("dark", Math.random() < .5); gl.hidden = false; setTimeout(() => gl.hidden = true, ms) },
     gBlock: ms => {
       const els = [...document.querySelectorAll(".glass, .btn, .smear, .chart, .pcard")].filter(e => !e.closest(".tune") && inView(e))
       if (!els.length) return; const el = pick(els); el.classList.add("ginv"); setTimeout(() => el.classList.remove("ginv"), ms)
