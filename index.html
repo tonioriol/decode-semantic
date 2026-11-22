@@ -186,6 +186,19 @@
   .split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 18px; margin-top: 40px; align-items: start; }
   .split .steps { grid-template-columns: minmax(0, 1fr); margin: 0; }
   @media (max-width: 900px) { .split { grid-template-columns: minmax(0, 1fr); } }
+  .hero .lead { max-width: 46ch; }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 40px; }
+  .pcard { display: block; padding: 26px; min-width: 0; transition: border-color .25s; }
+  .pcard:hover { border-color: var(--ink); }
+  .pcard .label { margin: 0 0 10px; }
+  .pcard h2 { margin: 0; font-size: clamp(24px, 2.6vw, 32px); font-weight: 600; letter-spacing: -.01em; }
+  .pcard > p:not(.label) { margin: 8px 0 0; color: var(--dim); }
+  .mini { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .mini b { display: block; font-size: clamp(36px, 4vw, 52px); font-weight: 600; font-stretch: 86%; line-height: .95; letter-spacing: -.02em; }
+  .mini span { display: block; font: 12.5px/1.4 var(--mono); color: var(--dim); margin-top: 6px; }
+  .pcard .more { display: block; margin-top: 20px; font: 13px var(--mono); color: var(--dim); }
+  .notewrap { max-width: 560px; margin-top: 24px; }
+  @media (max-width: 760px) { .pair { grid-template-columns: minmax(0, 1fr); } .pcard { padding: 20px 16px; } }
 </style>
 </head>
 <body>
@@ -195,65 +208,37 @@
 <div class="page">
   <header class="top">
     <a class="lockup" href="#"><svg><use href="#mark"/></svg><b>decode</b><span>semantic</span></a>
-    <nav><a class="btn sm hide-s" href="#memory">Memory</a><a class="btn sm hide-s" href="#semantic">Code search</a><a class="btn sm hide-s" href="https://github.com/tonioriol/decode-plugins">GitHub ↗</a><a class="btn sm primary" href="#install">Install</a></nav>
+    <nav><a class="btn sm hide-s" href="#search">Search</a><a class="btn sm hide-s" href="#memory">Memory</a><a class="btn sm hide-s" href="https://github.com/tonioriol/decode-plugins">GitHub ↗</a><a class="btn sm primary" href="#install">Install</a></nav>
   </header>
 
   <div class="hero">
-    <h1 class="smear" data-smear data-strips="9" data-size="clamp(36px, 8.6vw, 128px)">Decode Memory</h1>
-    <div class="hero-row">
-      <div>
-        <p class="lead"><b>Your coding agent remembers past work.</b> One short note per topic, in your repository. The next session finds it by meaning.</p>
-        <p class="problem">Comes with Decode Semantic, local code search by meaning, which also works on its own.</p>
-        <div class="ctas"><a class="btn primary" href="#install">Install <span class="k">→</span></a><a class="btn" href="#memory">How it works</a></div>
-      </div>
-      <div class="query glass notecard" aria-label="Example note">
-        <div class="qbar"><span>memory/20261113-search-engine/context.md</span><span><i>one per topic</i></span></div>
-<pre><b>---</b>
-title: Rust search engine
-status: active
-<b>---</b>
-<b>## TASK</b>   goal, done when
-<b>## SPEC</b>   link to the approved design
-<b>## FILES</b>  the files that matter now
-<b>## PLAN</b>   where work resumes, traps
-<b>## LOG</b>
-<b>### 2026-11-21 12:06</b>  warm query 3.7× less CPU
-- why, how, evidence, commit</pre>
-        <div class="qfoot"><span>plain Markdown, committed with git</span><span></span></div>
-      </div>
+    <h1 class="smear" data-smear data-strips="9" data-size="clamp(36px, 8.6vw, 128px)">Decode Semantic</h1>
+    <p class="lead"><b>Search by meaning for coding agents.</b> One local engine, two plugins. No API key; nothing leaves your machine.</p>
+    <div class="pair">
+      <a class="pcard glass" href="#search">
+        <p class="label">search</p>
+        <h2>Finds code by meaning</h2>
+        <p>Ask in plain words, get the file and line.</p>
+        <div class="mini"><div><b>5.6×</b><span>faster than Semble</span></div><div><b>0.855</b><span>NDCG@10, same quality</span></div></div>
+        <span class="more">How search works →</span>
+      </a>
+      <a class="pcard glass" href="#memory">
+        <p class="label">memory</p>
+        <h2>Remembers past work</h2>
+        <p>One note per topic in your repo, found again next session.</p>
+        <div class="mini"><div><b>25/30</b><span>answers right, vs 17 from transcripts</span></div><div><b>2.5×</b><span>fewer tokens per answer</span></div></div>
+        <span class="more">How memory works →</span>
+      </a>
     </div>
-  </div>
-
-  <div class="wrap">
-    <div class="stats glass">
-      <div class="stat"><div class="n">25<small>/30</small></div><div class="w">answers right from notes</div><div class="d">17/30 from raw transcripts</div></div>
-      <div class="stat"><div class="n">2.5<small>×</small></div><div class="w">fewer tokens</div><div class="d">138k vs 341k per answer, median</div></div>
-      <div class="stat"><div class="n">5.6<small>×</small></div><div class="w">faster code search</div><div class="d">0.34 vs 1.92 ms, vs Semble</div></div>
-      <div class="stat"><div class="n">0.855</div><div class="w">NDCG@10, same as Semble</div><div class="d">on Semble's own benchmark</div></div>
-    </div>
+    <div class="ctas"><a class="btn primary" href="#install">Install <span class="k">→</span></a><a class="btn" href="https://github.com/tonioriol/decode-plugins">GitHub <span class="k">↗</span></a></div>
   </div>
 
   <main class="wrap">
-    <section id="memory">
-      <p class="label">01 / memory</p>
-      <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Memory</h2>
-      <p class="intro">A skill tells the agent how to keep notes; hooks make sure it does.</p>
-      <figure class="tron glass">
-        <svg id="tron" role="img" aria-label="Memory loop: session starts, agent works, stop hook, note committed, back to the next session; before a condense the note is saved first"></svg>
-        <p class="small tnote">Tokens at about 4 characters per token, measured on our own notes.</p>
-      </figure>
-      <figure class="chart glass wide-chart">
-        <h3>Answering questions about past work</h3>
-        <p class="sub">30 real questions, one fresh agent per question and source, graded blind. Median input tokens and answers fully right.</p>
-        <svg id="recallcost" role="img" aria-label="Tokens to answer a question about past work, by source"></svg>
-      </figure>
-      <div class="ctas"><a class="btn" href="https://github.com/tonioriol/decode-plugins/tree/main/bench/memory">Run it on your own notes <span class="k">↗</span></a></div>
-    </section>
 
-    <section id="semantic">
-      <p class="label">02 / decode semantic</p>
-      <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Code search</h2>
-      <p class="intro">A Rust port of <a href="https://github.com/MinishLab/semble">Semble</a>. Memory uses it to find notes; the semantic-search plugin gives the agent the same search over code. No API key.</p>
+    <section id="search">
+      <p class="label">01 / search</p>
+      <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Search</h2>
+      <p class="intro">The engine, a Rust port of <a href="https://github.com/MinishLab/semble">Semble</a>. The semantic-search plugin gives the agent this search over your code; memory uses it to find notes.</p>
       <div class="split">
         <ol class="steps">
           <li class="glass"><h3>Index</h3><p>Splits code along its syntax and embeds each chunk with a small model on your CPU. Edits are picked up on the next search.</p></li>
@@ -298,6 +283,39 @@ status: active
       <div class="ctas"><a class="btn" href="https://github.com/tonioriol/decode-plugins/tree/main/bench/semantic">Run the benchmark <span class="k">↗</span></a></div>
     </section>
 
+    <section id="memory">
+      <p class="label">02 / memory</p>
+      <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Memory</h2>
+      <p class="intro">Built on search. A skill tells the agent how to keep notes; hooks make sure it does. Each note is plain Markdown, committed with git:</p>
+      <div class="notewrap">
+        <div class="query glass notecard" aria-label="Example note">
+        <div class="qbar"><span>memory/20261113-search-engine/context.md</span><span><i>one per topic</i></span></div>
+<pre><b>---</b>
+title: Rust search engine
+status: active
+<b>---</b>
+<b>## TASK</b>   goal, done when
+<b>## SPEC</b>   link to the approved design
+<b>## FILES</b>  the files that matter now
+<b>## PLAN</b>   where work resumes, traps
+<b>## LOG</b>
+<b>### 2026-11-21 12:06</b>  warm query 3.7× less CPU
+- why, how, evidence, commit</pre>
+        <div class="qfoot"><span>plain Markdown, committed with git</span><span></span></div>
+        </div>
+      </div>
+      <figure class="tron glass">
+        <svg id="tron" role="img" aria-label="Memory loop: session starts, agent works, stop hook, note committed, back to the next session; before a condense the note is saved first"></svg>
+        <p class="small tnote">Tokens at about 4 characters per token, measured on our own notes.</p>
+      </figure>
+      <figure class="chart glass wide-chart">
+        <h3>Answering questions about past work</h3>
+        <p class="sub">30 real questions, one fresh agent per question and source, graded blind. Median input tokens and answers fully right.</p>
+        <svg id="recallcost" role="img" aria-label="Tokens to answer a question about past work, by source"></svg>
+      </figure>
+      <div class="ctas"><a class="btn" href="https://github.com/tonioriol/decode-plugins/tree/main/bench/memory">Run it on your own notes <span class="k">↗</span></a></div>
+    </section>
+
     <section id="install">
       <p class="label">03 / install</p>
       <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Install</h2>
@@ -312,7 +330,7 @@ status: active
 codex plugin add semantic-search@decode-plugins
 codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</button></div></div>
       </div>
-      <p class="req">Code search only: install semantic-search@decode-plugins. OpenCode and Cursor: see the README. macOS or Linux (Windows through WSL); needs Bash, curl and Python 3, and Git, jq and ripgrep for the hooks.</p>
+      <p class="req">Search only: install semantic-search@decode-plugins. OpenCode and Cursor: see the README. macOS or Linux (Windows through WSL); needs Bash, curl and Python 3, and Git, jq and ripgrep for the hooks.</p>
     </section>
     <footer><span>MIT · built on minishlab/semble</span><a href="https://github.com/tonioriol/decode-plugins">github.com/tonioriol/decode-plugins</a></footer>
   </main>
