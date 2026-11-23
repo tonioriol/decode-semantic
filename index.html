@@ -546,7 +546,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   // Plain feelings, mostly 0..1, instead of physics knobs; drawSmears turns them into distances and springs.
   // Values: the owner's tuning of 2026-11-22.
   const DEF = { tail: .75, rest: .5, room: 1, linger: .5, bounce: .5, idle: .2, jitter: 1, echoes: 10, fade: 1, align: "left", header: .5,
-    glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1,
+    glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 0, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1,
     flowMode: "hops", flowSpeed: .5, flowEase: .7, flowJitter: .5, flowLen: .3, flowWidth: .35, flowFade: .8, flowDot: .4, flowFlash: .5,
     flowPause: .3, flowFork: .6, flowWire: .3, flowGap: .2, flowGlow: 0, accent: "mono", bgFade: .8, calm: .7 }
   const tune = new URLSearchParams(location.search).has("tune")
