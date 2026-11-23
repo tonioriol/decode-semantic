@@ -160,6 +160,8 @@
   .tron .wire { stroke: rgba(var(--acc-rgb), var(--wire, .16)); stroke-width: 2; fill: none; }
   .tron .trail { stroke: var(--acc); fill: none; stroke-linecap: butt; }
   .tron .cycle { fill: #fff; }
+  .tron .ring { fill: none; stroke: var(--acc); pointer-events: none; }
+  .tron .flare { fill: #fff; pointer-events: none; }
   .tron .flash { fill: var(--acc); pointer-events: none; }
   .tron text { font-family: var(--mono); fill: var(--dim); font-size: 13px; }
   .tron text.n { fill: rgba(var(--acc-rgb), .7); font-size: 12px; }
@@ -549,7 +551,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   const DEF = { tail: .75, rest: .5, room: 1, linger: .5, bounce: .5, idle: .2, jitter: 1, echoes: 10, fade: 1, align: "left", header: .5,
     glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 0, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1,
     flowMode: "hops", flowSpeed: .5, flowEase: .7, flowJitter: .5, flowLen: .3, flowWidth: .35, flowFade: .8, flowDot: .4, flowFlash: .5,
-    flowPause: .3, flowFork: .6, flowWire: .3, flowGap: .2, flowGlow: 0, accent: "mono", bgFade: .8, calm: .7 }
+    flowPause: .3, flowFork: .6, flowWire: .3, flowGap: .2, flowGlow: 0, flowBurst: .5, accent: "mono", bgFade: .8, calm: .7 }
   const tune = new URLSearchParams(location.search).has("tune")
   const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune2") || "{}") : {})
   window.pageTune = P // the flow chart script below reads its settings live
@@ -767,6 +769,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       ["flowWire", "Wires", "How visible the idle wires are", 0, 1, .01, ""],
       ["flowGap", "Box spacing", "Room between boxes, so longer signals show; more room makes the boxes smaller", 0, 1, .01, ""],
       ["flowGlow", "Glow", "Blur around the signal; 0 is sharp", 0, 1, .01, ""],
+      ["flowBurst", "Launch and impact", "The head pops out of a box with a small ring and lands with a ripple; 0 turns both off", 0, 1, .01, ""],
       ["Reading"],
       ["bgFade", "Background fade", "How much the ASCII background fades once you scroll past the top; 1 = gone", 0, 1, .01, ""],
       ["calm", "Calm further down", "Lower headings move less, glitches get rarer and the page and box flashes stop", 0, 1, .01, ""],
@@ -965,9 +968,9 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
     c: ["04", "Note committed", ["Result, evidence, where to", "resume. Git keeps it."], "≈6k read, ≈300 written"],
     p: ["05", "Before compaction", ["Compaction waits until", "the note is saved."], "same flush, nothing lost"],
   }
-  let boxes = {}, edges = {}, cycles = [], sigs = [], timers = [], fire = {}, mode, gap, glow = -1, blur
+  let boxes = {}, edges = {}, cycles = [], sigs = [], timers = [], fx = [], fxg, fire = {}, mode, gap, glow = -1, blur
   function layout() {
-    svg.innerHTML = ""; boxes = {}; edges = {}; cycles = []; sigs = []; timers = []; mode = pt.flowMode; gap = pt.flowGap; glow = -1
+    svg.innerHTML = ""; boxes = {}; edges = {}; cycles = []; sigs = []; timers = []; fx = []; mode = pt.flowMode; gap = pt.flowGap; glow = -1
     // space between neighbouring boxes; a wider chart scales down to fit, so more space means smaller boxes
     const narrow = svg.clientWidth < 600, bw = narrow ? 300 : 250, bh = 128, g = narrow ? 20 + 160 * gap : 40 + 260 * gap
     const W = narrow ? 400 : 60 + 3 * bw + 2 * g, x2 = 30 + bw + g, x3 = 30 + 2 * (bw + g), y2 = 30 + bh + g
@@ -1004,7 +1007,7 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
     // a signal is a few stacked dashes on the same wire, each dimmer than the one ahead, so its tail can fade out
     const mkTrail = (d) => {
       const segs = []; for (let i = 0; i < 8; i++) segs.push(mk("path", { d, class: "trail" }))
-      const tr = { segs, total: segs[0].getTotalLength(), dot: mk("circle", { r: 4, class: "cycle" }) }
+      const tr = { segs, total: segs[0].getTotalLength(), dot: mk("circle", { r: 4, class: "cycle" }), scale: 1 }
       hide(tr); return tr
     }
     if (mode === "hops") for (const k in E) edges[k] = mkTrail(E[k])
@@ -1021,6 +1024,8 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
     }
     // boxes sit on top of the wires and signals
     for (const k in boxes) svg.appendChild(boxes[k])
+    // launch rings and impact ripples draw over the boxes, so a landing shows on the box edge
+    fxg = mk("g", {})
   }
   function hide(tr) { for (const s of tr.segs) s.style.strokeDasharray = `0 ${tr.total + 999}`; tr.dot.style.opacity = 0 }
   // draw a signal whose front is at `head` px along its wire and whose streak is `len` px long; returns the front point
@@ -1031,11 +1036,14 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
       s.style.strokeWidth = w; s.style.opacity = 1 - pt.flowFade * (i + .5) / n
     })
     const p = tr.segs[0].getPointAtLength(Math.max(0, Math.min(tr.total, head))), on = pt.flowDot > 0 && head >= 0 && head <= tr.total
-    tr.dot.setAttribute("cx", p.x); tr.dot.setAttribute("cy", p.y); tr.dot.setAttribute("r", 1 + 5 * pt.flowDot); tr.dot.style.opacity = on ? 1 : 0
+    tr.dot.setAttribute("cx", p.x); tr.dot.setAttribute("cy", p.y); tr.dot.setAttribute("r", (1 + 5 * pt.flowDot) * tr.scale); tr.dot.style.opacity = on ? 1 : 0
     return p
   }
   // easing: 0 = constant speed, 1 = ease in and out; jitter bends each hop's curve a little differently
   const io = u => u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2
+  // a ring grows from r 0 to r1 while it fades and thins; a flare starts at r1 and shrinks to nothing
+  const out3 = u => 1 - Math.pow(1 - u, 3), back = u => 1 + 2.7 * Math.pow(u - 1, 3) + 1.7 * Math.pow(u - 1, 2)
+  function burst(kind, p, r1, dur, w, t) { fx.push({ c: mk("circle", { cx: p.x, cy: p.y, r: kind === "flare" ? r1 : 0, class: kind }, fxg), kind, r1, dur, w, t0: t }) }
   const NEXT = { s: ["w"], h: ["c"], c: ["s"], p: ["c"] }
   function launch(node, t) {
     let to = NEXT[node]
@@ -1045,6 +1053,8 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
       const k = `${node}>${n}`, e = edges[k]; if (sigs.some(s => s.k === k)) continue
       const len = Math.min(e.total * .8, 10 + 190 * pt.flowLen)
       sigs.push({ k, to: n, e, len, t0: t, dur: (e.total + len) / sp * (1 + J * rnd(-.45, .6)), ph: rnd(0, 6.3), wob: J * rnd(.02, .06), hit: false })
+      // born: a thin ring opens where the head leaves the box
+      const B = pt.flowBurst; if (B > 0) burst("ring", e.segs[0].getPointAtLength(0), 4 + 12 * B, .4, 1.5, t)
     }
   }
   let last = performance.now()
@@ -1061,15 +1071,27 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
         const u = Math.min(1, (t - s.t0) / s.dur)
         const eu = u + (io(u) - u) * pt.flowEase + Math.sin(u * Math.PI) * Math.sin(u * 9 + s.ph) * s.wob
         const head = eu * (s.e.total + s.len)
+        // the head swells out of the box with a slight overshoot, then flies at full size
+        s.e.scale = pt.flowBurst > 0 ? Math.max(0, back(Math.min(1, (t - s.t0) / .28))) : 1
         draw(s.e, head, s.len)
         if (!s.hit && head >= s.e.total) {
           s.hit = true
+          // impact: the head flares and collapses into the box while two ripples spread from the contact point
+          const B = pt.flowBurst
+          if (B > 0) { const p = s.e.segs[0].getPointAtLength(s.e.total), r = 1 + 5 * pt.flowDot; burst("flare", p, r * 1.8, .22, 0, t); burst("ring", p, 6 + 22 * B, .55, 2, t); burst("ring", p, 3 + 10 * B, .3, 1, t) }
           // a box that just fired ignores a second signal (two chains merging become one)
           if (fire[s.to] < .5) { const J = pt.flowJitter; timers.push({ at: t + (.03 + 1.2 * pt.flowPause) * (1 + J * rnd(-.6, 1)), node: s.to }) }
           fire[s.to] = 1
         }
         if (u < 1) return true
         hide(s.e); return false
+      })
+      fx = fx.filter(f => {
+        const u = (t - f.t0) / f.dur
+        if (u >= 1) { f.c.remove(); return false }
+        const e = out3(u)
+        f.c.setAttribute("r", (f.kind === "flare" ? 1 - e : e) * f.r1); f.c.style.strokeWidth = f.w * (1 - u); f.c.style.opacity = 1 - u
+        return true
       })
     } else {
       const sp = .4 + 1.6 * pt.flowSpeed
