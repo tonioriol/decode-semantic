@@ -368,6 +368,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
 (() => {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches
   const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x))
+  const depth = () => clamp(scrollY / innerHeight) // 0 at the top, 1 once the hero is scrolled away
   const accRGB = () => getComputedStyle(document.documentElement).getPropertyValue("--ink-rgb").trim() // the background stays black and white
 
   // ---------- 1. background ----------
@@ -439,7 +440,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MIN_FILTER, wg.LINEAR); wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MAG_FILTER, wg.LINEAR)
     wg.uniform2f(U("cell"), cw * dpr, ch * dpr); wg.uniform2f(U("atl"), atlas.width, atlas.height); wg.uniform1f(U("h"), cv.height)
   }
-  let font, cells
+  let font, cells, bgA = 1
   document.fonts.ready.then(size)
   // pointer, eased like a tilt: -1..1 across the viewport
   const tilt = { x: 0, y: 0, tx: 0, ty: 0 }, ripples = []
@@ -509,6 +510,8 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
     wg.activeTexture(wg.TEXTURE0); wg.bindTexture(wg.TEXTURE_2D, cellTex)
     wg.texImage2D(wg.TEXTURE_2D, 0, wg.RG8, cols, rows, 0, wg.RG, wg.UNSIGNED_BYTE, cells)
     wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MIN_FILTER, wg.NEAREST); wg.texParameteri(wg.TEXTURE_2D, wg.TEXTURE_MAG_FILTER, wg.NEAREST)
+    // below the hero the background steps back so it doesn't compete with the text
+    bgA = 1 - P.bgFade * depth(); cv.style.opacity = bgA.toFixed(3)
     wg.uniform3fv(U("rgb"), accRGB().split(",").map(x => x / 255))
     wg.clearColor(0, 0, 0, 0); wg.clear(wg.COLOR_BUFFER_BIT); wg.drawArrays(wg.TRIANGLES, 0, 3)
     negatives()
@@ -530,7 +533,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       const i0 = Math.max(0, Math.floor(r.left / cw)), i1 = Math.min(cols, Math.ceil(r.right / cw)), j0 = Math.max(0, Math.floor(r.top / ch)), j1 = Math.min(rows, Math.ceil(r.bottom / ch))
       for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
         const o = (j * cols + i) * 2
-        if (cells[o]) { g.globalAlpha = .14 + cells[o + 1] / LV * .8; g.fillText(RAMP[cells[o]], i * cw, j * ch) }
+        if (cells[o]) { g.globalAlpha = (.14 + cells[o + 1] / LV * .8) * bgA; g.fillText(RAMP[cells[o]], i * cw, j * ch) }
       }
       g.globalAlpha = 1
     }
@@ -545,7 +548,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   const DEF = { tail: .75, rest: .5, room: 1, linger: .5, bounce: .5, idle: .2, jitter: 1, echoes: 10, fade: 1, align: "left", header: .5,
     glitchRate: 1, glitchMs: 100, burst: 5, flash: .1, plainFont: "serif", gPage: 1, gBlock: 1, gBlink: 1, gPlain: 1, gWord: 1, gShift: 1,
     flowMode: "hops", flowSpeed: .5, flowEase: .7, flowJitter: .5, flowLen: .3, flowWidth: .35, flowFade: .8, flowDot: .4, flowFlash: .5,
-    flowPause: .3, flowFork: .6, flowWire: .3, flowGlow: 0, accent: "mono" }
+    flowPause: .3, flowFork: .6, flowWire: .3, flowGap: .2, flowGlow: 0, accent: "mono", bgFade: .8, calm: .7 }
   const tune = new URLSearchParams(location.search).has("tune")
   const P = Object.assign({}, DEF, tune ? JSON.parse(localStorage.getItem("headingTune2") || "{}") : {})
   window.pageTune = P // the flow chart script below reads its settings live
@@ -590,6 +593,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   }
   // the box is only the title's size: the tail spills over the content around it instead of pushing it away
   function layout(st) {
+    st.k = 1 - P.calm * clamp((st.el.getBoundingClientRect().top + scrollY) / innerHeight - .5) // 1 for the hero title, calmer further down
     st.room = P.room
     st.el.style.height = (st.capH + 2 * st.room).toFixed(4) + "em"
     st.el.style.textAlign = P.align
@@ -597,21 +601,22 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   document.fonts.ready.then(() => smears.forEach(measure))
   // smooth 1D value noise in -1..1, for the irregular parts of the motion
   const hash = n => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s) }
+  addEventListener("resize", () => smears.forEach(layout))
   const nz = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return (hash(i) + (hash(i + 1) - hash(i)) * u) * 2 - 1 }
   // scroll activity 0..1: jumps up while the page scrolls, fades over `hold` seconds after it stops;
   // the tail opens only with it. sdir is the side the tail opens on (behind the motion).
   let lastScroll = scrollY, sv = 0, act = 0, sdir = 1
   function drawSmears(t, dt) {
-    const T = P.tail, J = P.jitter, lag = .15 + .7 * P.linger, hold = .1 + 1.9 * P.linger
+    const lag = .15 + .7 * P.linger, hold = .1 + 1.9 * P.linger
     const K = 1400 * Math.pow(1 - lag * .97, 2.2), zeta = 1 - P.bounce * .9
-    const spacing = .16 * T, wave = .05 * T, idleWave = .03 * P.idle, float = .08 * P.idle, WS = 1.2, WL = 7
+    const WS = 1.2, WL = 7
     const raw = dt > 0 ? (scrollY - lastScroll) / dt / innerHeight : 0; lastScroll = scrollY
     sv += (clamp(raw, -4, 4) - sv) * clamp(dt * 10)
     if (Math.abs(sv) > .02) sdir = Math.sign(sv)
     const want = clamp(Math.abs(sv) * 3)
     act = want > act ? act + (want - act) * clamp(dt * 14) : act * Math.exp(-dt / hold)
-    const amp = wave * act + idleWave
     for (const s of smears) {
+      const T = P.tail * s.k, J = P.jitter * s.k, spacing = .16 * T, float = .08 * P.idle * s.k, amp = .05 * T * act + .03 * P.idle * s.k
       s.shown = Math.min(1, s.shown + dt / 1.6)
       const intro = 1 - (1 - s.shown) ** 3, N = s.N, y = s.y, v = s.v
       // the title: dragged behind the page by the scroll speed, plus the idle float
@@ -704,8 +709,8 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   }
   function glitch() {
     if (P.glitchRate > 0 && !document.hidden) {
-      const on = Object.keys(KINDS).filter(k => P[k])
-      for (let k = 0; k < P.burst && on.length; k++) KINDS[pick(on)](P.glitchMs * rnd(.5, 1.5))
+      const c = P.calm * depth(), on = Object.keys(KINDS).filter(k => P[k] && !(c > .3 && (k === "gPage" || k === "gBlock")))
+      if (Math.random() >= c) for (let k = 0; k < P.burst && on.length; k++) KINDS[pick(on)](P.glitchMs * rnd(.5, 1.5))
     }
     setTimeout(glitch, P.glitchRate > 0 ? -Math.log(1 - Math.random()) * 10000 / P.glitchRate : 1000)
   }
@@ -759,7 +764,11 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       ["flowPause", "Pause", "How long a box holds before it fires the next signal", 0, 1, .01, ""],
       ["flowFork", "Branching", "How often Agent works also fires toward Before a condense", 0, 1, .01, ""],
       ["flowWire", "Wires", "How visible the idle wires are", 0, 1, .01, ""],
+      ["flowGap", "Box spacing", "Room between boxes, so longer signals show; more room makes the boxes smaller", 0, 1, .01, ""],
       ["flowGlow", "Glow", "Blur around the signal; 0 is sharp", 0, 1, .01, ""],
+      ["Reading"],
+      ["bgFade", "Background fade", "How much the ASCII background fades once you scroll past the top; 1 = gone", 0, 1, .01, ""],
+      ["calm", "Calm further down", "Lower headings move less, glitches get rarer and the page and box flashes stop", 0, 1, .01, ""],
       ["Layout"],
       ["align", "Heading alignment", "", [["left", "Left"], ["center", "Center"]]],
       ["header", "Header backdrop", "0 = see-through, 1 = solid", 0, 1, .01, ""],
@@ -955,14 +964,16 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
     c: ["04", "Note committed", ["Result, evidence, where to", "resume. Git keeps it."], "≈6k read, ≈300 written"],
     p: ["05", "Before a condense", ["The condense waits until", "the note is saved."], "same flush, nothing lost"],
   }
-  let boxes = {}, edges = {}, cycles = [], sigs = [], timers = [], fire = {}, mode, glow = -1, blur
+  let boxes = {}, edges = {}, cycles = [], sigs = [], timers = [], fire = {}, mode, gap, glow = -1, blur
   function layout() {
-    svg.innerHTML = ""; boxes = {}; edges = {}; cycles = []; sigs = []; timers = []; mode = pt.flowMode; glow = -1
-    const narrow = svg.clientWidth < 600, W = narrow ? 400 : 1000, bw = narrow ? 300 : 250, bh = 128
+    svg.innerHTML = ""; boxes = {}; edges = {}; cycles = []; sigs = []; timers = []; mode = pt.flowMode; gap = pt.flowGap; glow = -1
+    // space between neighbouring boxes; a wider chart scales down to fit, so more space means smaller boxes
+    const narrow = svg.clientWidth < 600, bw = narrow ? 300 : 250, bh = 128, g = narrow ? 20 + 160 * gap : 40 + 260 * gap
+    const W = narrow ? 400 : 60 + 3 * bw + 2 * g, x2 = 30 + bw + g, x3 = 30 + 2 * (bw + g), y2 = 30 + bh + g
     const P = narrow
-      ? { s: [50, 20], w: [50, 200], h: [50, 380], c: [50, 560], p: [50, 740] }
-      : { s: [30, 30], w: [375, 30], h: [720, 30], c: [720, 250], p: [375, 250] }
-    const H = narrow ? 900 : 430
+      ? Object.fromEntries(["s", "w", "h", "c", "p"].map((k, i) => [k, [50, 20 + i * (bh + g)]]))
+      : { s: [30, 30], w: [x2, 30], h: [x3, 30], c: [x3, y2], p: [x2, y2] }
+    const H = narrow ? 20 + 5 * bh + 4 * g + 32 : y2 + bh + 52
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`)
     const defs = mk("defs", {}), f = mk("filter", { id: "glow", x: "-50%", y: "-50%", width: "200%", height: "200%" }, defs)
     blur = mk("feGaussianBlur", { stdDeviation: 0, result: "b" }, f); const m = mk("feMerge", {}, f); mk("feMergeNode", { in: "b" }, m); mk("feMergeNode", { in: "SourceGraphic" }, m)
@@ -1038,7 +1049,7 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
   let last = performance.now()
   function tick(now) {
     const dt = Math.min(.05, (now - last) / 1000), t = now / 1000; last = now
-    if (pt.flowMode !== mode) layout()
+    if (pt.flowMode !== mode || pt.flowGap !== gap) layout()
     if (pt.flowGlow !== glow) { glow = pt.flowGlow; blur.setAttribute("stdDeviation", 4 * glow); for (const el of svg.querySelectorAll(".trail, .cycle")) el.style.filter = glow > 0 ? "url(#glow)" : "" }
     svg.style.setProperty("--wire", .03 + .4 * pt.flowWire)
     for (const k in boxes) { fire[k] = Math.max(0, fire[k] - dt / .5); boxes[k].flash.setAttribute("opacity", (.35 * pt.flowFlash * fire[k] * fire[k]).toFixed(3)); boxes[k].classList.toggle("lit", pt.flowFlash > 0 && fire[k] > .25) }
