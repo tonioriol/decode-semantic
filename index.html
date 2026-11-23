@@ -253,7 +253,7 @@
       <a class="pcard glass" href="#memory">
         <p class="label">memory</p>
         <h2>Remembers past work</h2>
-        <p>One note per topic in your repo, found again next session.</p>
+        <p>One note per topic in your repo, found again next session. Past sessions are searchable too.</p>
         <div class="mini"><div><b>25/30</b><span>answers right, vs 17 from transcripts</span></div><div><b>2.5×</b><span>fewer tokens per answer</span></div></div>
         <span class="more">How memory works →</span>
       </a>
@@ -333,9 +333,10 @@ status: active
         </div>
       </div>
       <figure class="tron glass">
-        <svg id="tron" role="img" aria-label="Memory loop: session starts, agent works, stop hook, note committed, back to the next session; before a condense the note is saved first"></svg>
+        <svg id="tron" role="img" aria-label="Memory loop: session starts, agent works, stop hook, note committed, back to the next session; before compaction the note is saved first"></svg>
         <p class="small tnote">Tokens at about 4 characters per token, measured on our own notes.</p>
       </figure>
+      <p class="intro"><b>Past sessions, too.</b> On Claude Code and Codex the plugin also indexes your earlier sessions with the agent, only what you and it wrote, and gives the agent a <b>search_chats</b> tool. When no note has the answer, it finds what was said before. On by default, local, refreshed every 30 seconds.</p>
       <figure class="chart glass wide-chart">
         <h3>Answering questions about past work</h3>
         <p class="sub">30 real questions, one fresh agent per question and source, graded blind. Median input tokens and answers fully right.</p>
@@ -762,7 +763,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
       ["flowDot", "Head", "Size of the bright dot at the front; 0 hides it", 0, 1, .01, ""],
       ["flowFlash", "Box flash", "How much a box lights up when a signal reaches it", 0, 1, .01, ""],
       ["flowPause", "Pause", "How long a box holds before it fires the next signal", 0, 1, .01, ""],
-      ["flowFork", "Branching", "How often Agent works also fires toward Before a condense", 0, 1, .01, ""],
+      ["flowFork", "Branching", "How often Agent works also fires toward Before compaction", 0, 1, .01, ""],
       ["flowWire", "Wires", "How visible the idle wires are", 0, 1, .01, ""],
       ["flowGap", "Box spacing", "Room between boxes, so longer signals show; more room makes the boxes smaller", 0, 1, .01, ""],
       ["flowGlow", "Glow", "Blur around the signal; 0 is sharp", 0, 1, .01, ""],
@@ -962,7 +963,7 @@ if (document.getElementById("tron")) { // memory loop: boxes joined by wires; si
     w: ["02", "Agent works", ["Searches the notes by meaning", "when it needs the past."], "≈138k to answer from notes"],
     h: ["03", "Stop hook", ["Work done, no note yet?", "It asks for one, once."], "+≈120 tokens, per reminder"],
     c: ["04", "Note committed", ["Result, evidence, where to", "resume. Git keeps it."], "≈6k read, ≈300 written"],
-    p: ["05", "Before a condense", ["The condense waits until", "the note is saved."], "same flush, nothing lost"],
+    p: ["05", "Before compaction", ["Compaction waits until", "the note is saved."], "same flush, nothing lost"],
   }
   let boxes = {}, edges = {}, cycles = [], sigs = [], timers = [], fire = {}, mode, gap, glow = -1, blur
   function layout() {
