@@ -249,7 +249,7 @@
         <p class="label">search</p>
         <h2>Finds code by meaning</h2>
         <p>Ask in plain words, get the file and line.</p>
-        <div class="mini"><div><b>5.6×</b><span>faster than Semble</span></div><div><b>0.855</b><span>NDCG@10, same quality</span></div></div>
+        <div class="mini"><div><b>3–4×</b><span>faster than Semble, on real data</span></div><div><b>0.854</b><span>NDCG@10; Semble 0.855</span></div></div>
         <span class="more">How search works →</span>
       </a>
       <a class="pcard glass" href="#memory">
@@ -268,7 +268,7 @@
     <section id="search">
       <p class="label">01 / search</p>
       <h2 class="smear" data-smear data-size="clamp(56px, 11vw, 150px)">Search</h2>
-      <p class="intro">The engine, a Rust port of <a href="https://github.com/MinishLab/semble">Semble</a>. The semantic-search plugin gives the agent this search over your code; memory uses it to find notes.</p>
+      <p class="intro">The engine started as a Rust port of <a href="https://github.com/MinishLab/semble">Semble</a>, then improved. The semantic-search plugin gives the agent this search over your code; memory uses it to find notes.</p>
       <div class="split">
         <ol class="steps">
           <li class="glass"><h3>Index</h3><p>Splits code along its syntax and embeds each chunk with a small model on your CPU. Edits are picked up on the next search.</p></li>
@@ -282,34 +282,34 @@
           <div class="qfoot"><span id="qstat">on the decode-plugins repository</span><span id="qms"></span></div>
         </div>
       </div>
-      <p class="intro">Measured with <a href="https://github.com/MinishLab/semble/tree/a1ba6c18a4b0a58a3d1a15217d64bc92678d1d9d/benchmarks">Semble's benchmark</a>: 1,251 queries, 63 repositories, 19 languages.</p>
+      <p class="intro">Measured against Python Semble 0.7.3 on the author's own code, notes and past chats, and on Semble's own benchmark. Each chart names the engine version it comes from.</p>
       <div class="charts">
-        <figure class="chart glass">
-          <h3>Quality vs time to index</h3>
-          <p class="sub">From nothing. Up is better, left is faster.</p>
-          <svg id="cold" role="img" aria-label="NDCG@10 against cold index time"></svg>
-          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic</span><span><i style="background:var(--semble)"></i>Semble</span><span><i style="background:var(--faint)"></i>other tools, published</span></div>
-        </figure>
-        <figure class="chart glass">
-          <h3>Quality vs search speed</h3>
-          <p class="sub">With the index already built.</p>
-          <svg id="scatter" role="img" aria-label="NDCG@10 against warm query latency"></svg>
-          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic</span><span><i style="background:var(--semble)"></i>Semble</span><span><i style="background:var(--faint)"></i>other tools, published</span></div>
-        </figure>
         <figure class="chart glass wide">
-          <h3>Memory and CPU</h3>
-          <p class="sub">19 repositories, 378 queries, 3 runs. Bars are means; “× less” is the median per repository.</p>
-          <svg id="res" role="img" aria-label="Memory and CPU, Semble against Decode Semantic"></svg>
-          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic</span><span><i style="background:var(--semble)"></i>Semble (Python)</span></div>
+          <h3>Speed and memory on real data</h3>
+          <p class="sub">How many times better than Python Semble 0.7.3, with the same model on the same machine. 50 real searches per corpus. Code: 6,968 files. Notes: 206 MB. Past chats: 14,562 sessions, 429 MB. Engine: build just before v0.1.2.</p>
+          <svg id="real" role="img" aria-label="Decode Semantic against Python Semble 0.7.3 on code, notes and past chats: warm search 3.3 to 4.0 times faster, cold index 2.3 to 2.5 times faster, peak memory 2.1 to 2.3 times less, idle memory 7.6 to 9.4 times less, index on disk 1.5 to 1.8 times smaller"></svg>
+          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic</span><span><i style="background:var(--semble)"></i>Python Semble 0.7.3 (1×)</span></div>
+        </figure>
+        <figure class="chart glass">
+          <h3>Code quality</h3>
+          <p class="sub">Semble's benchmark: 1,251 queries, 63 repositories, 19 languages. NDCG@10, up is better.</p>
+          <svg id="qcode" role="img" aria-label="NDCG@10 on Semble's benchmark: Semble 0.7.3 scores 0.8547, Decode Semantic v0.1.3 scores 0.8539"></svg>
+          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic v0.1.3, docs included</span><span><i style="background:var(--semble)"></i>Semble 0.7.3</span></div>
+        </figure>
+        <figure class="chart glass">
+          <h3>Notes quality</h3>
+          <p class="sub">Questions about our own notes: 117 for tuning, 83 held back. NDCG@10, up is better.</p>
+          <svg id="qnotes" role="img" aria-label="NDCG@10 on questions about notes: tuning set 0.68 on v0.1.2 and 0.80 on v0.1.3; blind holdout 0.78 on v0.1.2 and 0.86 on v0.1.3"></svg>
+          <div class="legend"><span><i style="background:var(--faint)"></i>Decode Semantic v0.1.2</span><span><i style="background:var(--acc)"></i>v0.1.3</span></div>
         </figure>
         <figure class="chart glass wide">
           <h3>Answer found within a token budget</h3>
-          <p class="sub">Share of queries whose answer has been read, by tokens read.</p>
+          <p class="sub">Share of queries whose answer has been read, by tokens read. Semble's benchmark, rerun on 2026-11-19 with Decode Semantic v0.1.0 (code only); not rerun on v0.1.3.</p>
           <svg id="recall" role="img" aria-label="Recall against tokens read"></svg>
-          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic</span><span><i class="band" style="background:var(--semble)"></i>Semble (band under the line)</span><span><i style="background:var(--faint)"></i>grep, then read</span></div>
+          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic v0.1.0</span><span><i class="band" style="background:var(--semble)"></i>Semble 0.7.3 (band under the line)</span><span><i style="background:var(--faint)"></i>grep, then read</span></div>
         </figure>
       </div>
-      <p class="small">Our numbers: one Apple M4 Pro. Grey dots: Semble's README, on their machine.</p>
+      <p class="small">Real-data runs: one Apple M4 Pro, shared with other work, 4 threads per engine; code and notes are the median of 3 runs, past chats 1 run. Both engines were run as MCP servers. <a href="https://github.com/tonioriol/decode-plugins/tree/main/bench/semantic#real-data-speed-and-memory">Method and caveats</a>.</p>
       <div class="ctas"><a class="btn" href="https://github.com/tonioriol/decode-plugins/tree/main/bench/semantic">Run the benchmark <span class="k">↗</span></a></div>
     </section>
 
@@ -329,7 +329,7 @@ status: active
 <b>## FILES</b>  the files that matter now
 <b>## PLAN</b>   where work resumes, traps
 <b>## LOG</b>
-<b>### 2026-11-21 12:06</b>  warm query 3.7× less CPU
+<b>### 2026-11-24 16:35</b>  warm search 3.3× faster
 - why, how, evidence, commit</pre>
         <div class="qfoot"><span>plain Markdown, committed with git</span><span></span></div>
         </div>
@@ -872,7 +872,7 @@ codex plugin add memory@decode-plugins</pre><button class="btn sm copy">Copy</bu
   }))
 })()
 
-// charts: Semble README's two benchmark charts, redrawn
+// charts: real-data speed and quality, plus Semble README's token-recall chart redrawn
 const NS = "http://www.w3.org/2000/svg"
 const el = (tag, attrs, parent, text) => {
   const n = document.createElementNS(NS, tag)
@@ -885,39 +885,68 @@ const log = Math.log10
 const frame = (svg, w, h, m) => { svg.setAttribute("viewBox", `0 0 ${w} ${h}`); return { x0: m.l, x1: w - m.r, y0: h - m.b, y1: m.t } }
 const M = { l: 40, r: 16, t: 26, b: 36 }
 
-if (document.getElementById("cold")) { // quality vs cold index time; grey rows = Semble benchmarks/README.md "Main results" Index column
-  const published = [["CodeRankEmbed", 0.839, 116000], ["ColGREP", 0.693, 5400], ["BM25", 0.673, 47], ["zvec-grep", 0.670, 3400], ["ck", 0.642, 96000], ["codebase-memory-mcp", 0.630, 454], ["grepai", 0.561, 35000]]
-  const measured = [["Semble", 0.8547, 658.5, "--semble"], ["Decode Semantic", 0.8553, 123.6, "--acc"]]
-  const svg = document.getElementById("cold"), f = frame(svg, innerWidth < 600 ? 380 : 520, 320, M)
-  const x = (ms) => f.x0 + ((log(ms) - 1) / 5) * (f.x1 - f.x0), y = (v) => f.y0 - v * (f.y0 - f.y1)
+if (document.getElementById("real")) { // Python Semble 0.7.3 vs Decode Semantic on real data, bars = how many times better; ratios from unrounded medians
+  const corpora = ["Code", "Notes", "Past chats"]
+  const metrics = [
+    ["Warm search, median", [["4.70 → 1.43 ms", 3.3], ["2.24 → 0.67 ms", 3.3], ["10.44 → 2.61 ms", 4.0]]],
+    ["Cold index and first answer", [["11.5 → 5.1 s", 2.3], ["6.1 → 2.6 s", 2.3], ["141.8 → 56.1 s", 2.5]]],
+    ["Peak memory", [["1,033 → 462 MB", 2.2], ["723 → 313 MB", 2.3], ["9,810 → 4,747 MB", 2.1]]],
+    ["Idle memory after 150 searches", [["839 → 105 MB", 8.0], ["616 → 82 MB", 7.6], ["5,185 → 550 MB", 9.4]]],
+    ["Index on disk", [["153 → 84 MB", 1.8], ["75 → 46 MB", 1.6], ["1,467 → 971 MB", 1.5]]],
+  ]
+  const narrow = innerWidth < 600, W = narrow ? 330 : 700, L = 84, top = 26, unit = (W - L - (narrow ? 160 : 190)) / 10
+  const svg = document.getElementById("real"), x = (r) => L + r * unit
+  const groupH = 98, H = top + metrics.length * groupH
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`)
+  const ticks = narrow ? [0, 5, 10] : [0, 2, 4, 6, 8, 10]
   const g = el("g", { class: "grid" }, svg)
-  for (const v of [0, 0.25, 0.5, 0.75, 1]) { el("line", { x1: f.x0, x2: f.x1, y1: y(v), y2: y(v) }, g); el("text", { x: f.x0 - 6, y: y(v) + 4, "text-anchor": "end" }, svg, v.toFixed(2)) }
-  for (const [ms, t] of [[10, "10 ms"], [100, "100 ms"], [1000, "1 s"], [10000, "10 s"], [100000, "100 s"], [1000000, "1000 s"]]) el("text", { x: x(ms), y: f.y0 + 18, "text-anchor": "middle" }, svg, t)
-  el("text", { x: f.x0 - 34, y: f.y1 - 14 }, svg, "NDCG@10")
-  for (const [name, v, ms] of published) {
-    el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 5, fill: "var(--faint)", stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, index ${ms >= 1000 ? ms / 1000 + " s" : ms + " ms"} (published)`)
-    if (["CodeRankEmbed", "BM25", "grepai"].includes(name)) el("text", { x: x(ms) + (name === "CodeRankEmbed" ? -20 : 8), y: y(v) + (name === "CodeRankEmbed" ? -10 : 4), "text-anchor": name === "CodeRankEmbed" ? "middle" : "start", class: "lab" }, svg, name)
-  }
-  for (const [name, v, ms, c] of measured) el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 6.5, fill: `var(${c})`, stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, index ${ms} ms`)
-  el("text", { x: x(123.6) - 2, y: y(0.8553) - 14, "text-anchor": "middle", class: "lab strong" }, svg, "Decode Semantic 124 ms")
-  el("text", { x: x(658.5) + 10, y: y(0.8547) + 18, class: "lab" }, svg, "Semble 659 ms")
+  for (const r of ticks) el("text", { x: x(r), y: 10, "text-anchor": "middle" }, svg, `${r}×`)
+  metrics.forEach(([name, rows], i) => {
+    const y0 = top + i * groupH
+    for (const r of ticks) el("line", { x1: x(r), x2: x(r), y1: y0 + 24, y2: y0 + 24 + 3 * 22 }, g) // grid lines span the bars only, never the heading
+    el("line", { x1: x(1), x2: x(1), y1: y0 + 24, y2: y0 + 24 + 3 * 22, stroke: "var(--semble)", "stroke-width": 2 }, svg)
+    el("text", { x: 0, y: y0 + 16, class: "lab" }, svg, name)
+    rows.forEach(([text, ratio], j) => {
+      const y = y0 + 26 + j * 22
+      el("text", { x: 0, y: y + 11 }, svg, corpora[j])
+      el("title", {}, el("rect", { x: x(0), y, width: ratio * unit, height: 14, fill: "var(--acc)" }, svg), `${corpora[j]}, ${name}: ${text}, ${ratio.toFixed(1)}× better`)
+      el("text", { x: x(ratio) + 8, y: y + 11, class: "strong" }, svg, `${ratio.toFixed(1)}×`)
+      el("text", { x: x(ratio) + 42, y: y + 11 }, svg, text)
+    })
+  })
 }
-if (document.getElementById("scatter")) { // quality vs speed; grey rows = Semble benchmarks/README.md "Main results"
-  const published = [["CodeRankEmbed", 0.839, 16], ["ColGREP", 0.693, 122], ["BM25", 0.673, 0.17], ["zvec-grep", 0.670, 391], ["ck", 0.642, 187], ["codebase-memory-mcp", 0.630, 46], ["grepai", 0.561, 48], ["probe", 0.387, 207], ["cs", 0.200, 22], ["ripgrep", 0.126, 14]]
-  const measured = [["Semble", 0.8547, 1.92, "--semble"], ["Decode Semantic", 0.8553, 0.34, "--acc"]]
-  const svg = document.getElementById("scatter"), f = frame(svg, innerWidth < 600 ? 380 : 520, 320, M)
-  const x = (ms) => f.x0 + ((log(ms) + 1) / 4) * (f.x1 - f.x0), y = (v) => f.y0 - v * (f.y0 - f.y1)
-  const g = el("g", { class: "grid" }, svg)
-  for (const v of [0, 0.25, 0.5, 0.75, 1]) { el("line", { x1: f.x0, x2: f.x1, y1: y(v), y2: y(v) }, g); el("text", { x: f.x0 - 6, y: y(v) + 4, "text-anchor": "end" }, svg, v.toFixed(2)) }
-  for (const ms of [0.1, 1, 10, 100, 1000]) el("text", { x: x(ms), y: f.y0 + 18, "text-anchor": "middle" }, svg, ms >= 1 ? `${ms} ms` : `${ms}`)
-  el("text", { x: f.x0 - 34, y: f.y1 - 14 }, svg, "NDCG@10")
-  for (const [name, v, ms] of published) {
-    el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 5, fill: "var(--faint)", stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, ${ms} ms (published)`)
-    if (["CodeRankEmbed", "BM25", "ripgrep"].includes(name)) el("text", { x: x(ms) + 8, y: y(v) + 4, class: "lab" }, svg, name)
+const hbars = (svg, groups) => { // horizontal bars on a 0 to 1 scale; groups = [{ title?, bars: [{ label, v, c, text, strong? }] }]
+  const W = 300, vw = W - 54
+  let y = 4
+  for (const gr of groups) {
+    if (gr.title) { el("text", { x: 0, y: y + 12, class: "lab" }, svg, gr.title); y += 24 }
+    for (const b of gr.bars) {
+      el("text", { x: 0, y: y + 12 }, svg, b.label)
+      el("rect", { x: 0, y: y + 18, width: b.v * vw, height: 14, fill: `var(${b.c})` }, svg)
+      el("text", { x: b.v * vw + 8, y: y + 30, class: b.strong ? "strong" : "lab" }, svg, b.text)
+      y += 42
+    }
+    y += 8
   }
-  for (const [name, v, ms, c] of measured) el("title", {}, el("circle", { cx: x(ms), cy: y(v), r: 6.5, fill: `var(${c})`, stroke: "var(--bg)", "stroke-width": 2 }, svg), `${name}: ${v}, ${ms} ms`)
-  el("text", { x: x(0.34) - 2, y: y(0.8553) - 14, "text-anchor": "middle", class: "lab strong" }, svg, "Decode Semantic 0.34 ms")
-  el("text", { x: x(1.92) + 10, y: y(0.8547) + 18, class: "lab" }, svg, "Semble 1.92 ms")
+  svg.setAttribute("viewBox", `0 0 ${W} ${y - 8}`)
+}
+if (document.getElementById("qcode")) { // Semble's 63-repo benchmark, NDCG@10
+  hbars(document.getElementById("qcode"), [{ bars: [
+    { label: "Semble 0.7.3", v: 0.8547, c: "--semble", text: "0.8547" },
+    { label: "Decode Semantic v0.1.3", v: 0.8539, c: "--acc", text: "0.8539", strong: true },
+  ] }])
+}
+if (document.getElementById("qnotes")) { // memory gold set, span-aware NDCG@10, v0.1.2 vs v0.1.3
+  hbars(document.getElementById("qnotes"), [
+    { title: "117 tuning questions", bars: [
+      { label: "v0.1.2", v: 0.6806, c: "--faint", text: "0.68" },
+      { label: "v0.1.3", v: 0.8046, c: "--acc", text: "0.80", strong: true },
+    ] },
+    { title: "83 blind holdout questions", bars: [
+      { label: "v0.1.2", v: 0.7777, c: "--faint", text: "0.78" },
+      { label: "v0.1.3", v: 0.8598, c: "--acc", text: "0.86", strong: true },
+    ] },
+  ])
 }
 if (document.getElementById("recall")) { // recall vs tokens; rerun of Semble's token-efficiency script
   const budgets = [500, 1000, 2000, 4000, 8000, 16000, 32000]
@@ -936,21 +965,6 @@ if (document.getElementById("recall")) { // recall vs tokens; rerun of Semble's 
   }
   el("text", { x: x(500) + 6, y: y(0.842) + 22, class: "lab strong" }, svg, "84% found within 500 tokens")
   el("text", { x: x(32000) - 4, y: y(0.589) + 20, "text-anchor": "end", class: "lab" }, svg, "grep + read: 59% at 32k")
-}
-if (document.getElementById("res")) { // memory and CPU: Python Semble vs Decode Semantic, 19 speed-benchmark repos, 3 runs, means
-  const rows = [["Peak memory", 167, 66, "MB", 2.4], ["Idle memory, index loaded", 129, 40, "MB", 3.3], ["CPU, whole run", 0.93, 0.40, "s", 2.6]]
-  const svg = document.getElementById("res"), narrow = innerWidth < 600, f = frame(svg, narrow ? 380 : 900, narrow ? 260 : 230, { l: narrow ? 8 : 230, r: 70, t: 10, b: 10 })
-  const band = (f.y0 - f.y1) / rows.length
-  rows.forEach(([name, py, us, unit, med], i) => {
-    const top = f.y1 + i * band, w = (v) => (v / py) * (f.x1 - f.x0)
-    if (narrow) el("text", { x: f.x0, y: top + 14, class: "lab" }, svg, name)
-    else el("text", { x: f.x0 - 14, y: top + band / 2 + 5, "text-anchor": "end", class: "lab" }, svg, name)
-    const y1 = top + (narrow ? 24 : band / 2 - 20), h = 16
-    el("rect", { x: f.x0, y: y1, width: w(py), height: h, fill: "var(--semble)" }, svg)
-    el("text", { x: f.x0 + w(py) + 8, y: y1 + 13 }, svg, `${py} ${unit}`)
-    el("rect", { x: f.x0, y: y1 + h + 6, width: w(us), height: h, fill: "var(--acc)" }, svg)
-    el("text", { x: f.x0 + w(us) + 8, y: y1 + h + 19, class: "strong" }, svg, `${us.toFixed(unit === "s" ? 2 : 0)} ${unit} · ${med}× less`)
-  })
 }
 </script>
 
