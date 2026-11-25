@@ -249,7 +249,7 @@
         <p class="label">search</p>
         <h2>Finds code by meaning</h2>
         <p>Ask in plain words, get the file and line.</p>
-        <div class="mini"><div><b>3–4×</b><span>faster than Semble, on real data</span></div><div><b>0.854</b><span>NDCG@10; Semble 0.855</span></div></div>
+        <div class="mini"><div><b>3–4×</b><span>faster than Semble, on real data</span></div><div><b>0.872</b><span>NDCG@10, held-out; Semble 0.861</span></div></div>
         <span class="more">How search works →</span>
       </a>
       <a class="pcard glass" href="#memory">
@@ -292,9 +292,9 @@
         </figure>
         <figure class="chart glass">
           <h3>Code quality</h3>
-          <p class="sub">Semble's benchmark: 1,251 queries, 63 repositories, 19 languages. NDCG@10, up is better.</p>
-          <svg id="qcode" role="img" aria-label="NDCG@10 on Semble's benchmark: Semble 0.7.3 scores 0.8547, Decode Semantic v0.1.3 scores 0.8539"></svg>
-          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic v0.1.3, docs included</span><span><i style="background:var(--semble)"></i>Semble 0.7.3</span></div>
+          <p class="sub">Semble's benchmark: 1,251 queries, 63 repositories, 19 languages, split into 42 repositories for tuning and 21 held back. NDCG@10, up is better.</p>
+          <svg id="qcode" role="img" aria-label="NDCG@10 on Semble's benchmark: on 42 tuning repositories Semble 0.7.3 scores 0.8515 and Decode Semantic v0.1.5 scores 0.8633; on 21 held-out repositories Semble scores 0.8611 and Decode Semantic scores 0.8723"></svg>
+          <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic v0.1.5, docs included</span><span><i style="background:var(--semble)"></i>Semble 0.7.3</span></div>
         </figure>
         <figure class="chart glass">
           <h3>Notes quality</h3>
@@ -304,7 +304,7 @@
         </figure>
         <figure class="chart glass wide">
           <h3>Answer found within a token budget</h3>
-          <p class="sub">Share of queries whose answer has been read, by tokens read. Semble's benchmark, rerun on 2026-11-19 with Decode Semantic v0.1.0 (code only); not rerun on v0.1.3.</p>
+          <p class="sub">Share of queries whose answer has been read, by tokens read. Semble's benchmark, rerun on 2026-11-19 with Decode Semantic v0.1.0 (code only); not rerun since.</p>
           <svg id="recall" role="img" aria-label="Recall against tokens read"></svg>
           <div class="legend"><span><i style="background:var(--acc)"></i>Decode Semantic v0.1.0</span><span><i class="band" style="background:var(--semble)"></i>Semble 0.7.3 (band under the line)</span><span><i style="background:var(--faint)"></i>grep, then read</span></div>
         </figure>
@@ -931,10 +931,16 @@ const hbars = (svg, groups) => { // horizontal bars on a 0 to 1 scale; groups = 
   svg.setAttribute("viewBox", `0 0 ${W} ${y - 8}`)
 }
 if (document.getElementById("qcode")) { // Semble's 63-repo benchmark, NDCG@10
-  hbars(document.getElementById("qcode"), [{ bars: [
-    { label: "Semble 0.7.3", v: 0.8547, c: "--semble", text: "0.8547" },
-    { label: "Decode Semantic v0.1.3", v: 0.8539, c: "--acc", text: "0.8539", strong: true },
-  ] }])
+  hbars(document.getElementById("qcode"), [
+    { title: "42 tuning repositories", bars: [
+      { label: "Semble 0.7.3", v: 0.8515, c: "--semble", text: "0.8515" },
+      { label: "Decode Semantic v0.1.5", v: 0.8633, c: "--acc", text: "0.8633", strong: true },
+    ] },
+    { title: "21 held-out repositories", bars: [
+      { label: "Semble 0.7.3", v: 0.8611, c: "--semble", text: "0.8611" },
+      { label: "Decode Semantic v0.1.5", v: 0.8723, c: "--acc", text: "0.8723", strong: true },
+    ] },
+  ])
 }
 if (document.getElementById("qnotes")) { // memory gold set, span-aware NDCG@10, v0.1.2 vs v0.1.3
   hbars(document.getElementById("qnotes"), [
